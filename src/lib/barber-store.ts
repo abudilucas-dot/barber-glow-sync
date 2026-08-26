@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export type Client = { id: string; name: string; whatsapp: string };
 export type Barber = {
@@ -44,52 +45,8 @@ export const SHOP = {
   ],
 };
 
-const KEYS = {
-  clients: "barbearia.clients",
-  barbers: "barbearia.barbers",
-  appointments: "barbearia.appointments",
-} as const;
-
-const SEED_BARBERS: Barber[] = [
-  {
-    id: "b1",
-    name: "Rafael Moretti",
-    specialty: "Degradê & Navalhado",
-    whatsapp: "5511988880001",
-  },
-  {
-    id: "b2",
-    name: "Caio Bastos",
-    specialty: "Barba Terapia & Toalha Quente",
-    whatsapp: "5511988880002",
-  },
-  {
-    id: "b3",
-    name: "Diego Almeida",
-    specialty: "Cortes Clássicos & Pompadour",
-    whatsapp: "5511988880003",
-  },
-];
-
 export const uid = () =>
   `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-
-function read<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function write<T>(key: string, value: T) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(key, JSON.stringify(value));
-  window.dispatchEvent(new Event("barbearia:update"));
-}
 
 export function todayISO() {
   const d = new Date();
@@ -98,13 +55,15 @@ export function todayISO() {
   ).padStart(2, "0")}`;
 }
 
-/** Remove agendamentos com data anterior à data de hoje. */
-export function purgePastAppointments() {
-  const today = todayISO();
-  const all = read<Appointment[]>(KEYS.appointments, []);
-  const kept = all.filter((a) => a.date >= today);
-  if (kept.length !== all.length) write(KEYS.appointments, kept);
-  return all.length - kept.length;
+/** Remove agendamentos com data anterior à data de hoje (requer login). */
+export async function purgePastAppointments() {
+  const { data, error } = await supabase
+    .from("appointments")
+    .delete()
+    .lt("date", todayISO())
+    .select("id");
+  if (error) return 0;
+  return data?.length ?? 0;
 }
 
 export function nextDays(count = 7) {
@@ -147,94 +106,115 @@ export function waLink(phone: string, message: string) {
   return `https://wa.me/${full}?text=${encodeURIComponent(message)}`;
 }
 
-/** Hook central de dados — sincroniza entre abas e componentes. */
+/** Hook central de dados — lê e grava no banco da barbearia. */
 export function useBarbershop() {
   const [clients, setClients] = useState<Client[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [ready, setReady] = useState(false);
 
-  const refresh = useCallback(() => {
-    setClients(read<Client[]>(KEYS.clients, []));
-    setBarbers(read<Barber[]>(KEYS.barbers, []));
-    setAppointments(read<Appointment[]>(KEYS.appointments, []));
+  const refresh = useCallback(async () => {
+    const [barbersRes, apptRes, clientsRes] = await Promise.all([
+      supabase.from("barbers").select("*").order("created_at"),
+      supabase.from("appointments").select("*").order("date").order("time"),
+      supabase.from("clients").select("*").order("created_at"),
+    ]);
+    setBarbers(
+      (barbersRes.data ?? []).map((b) => ({
+        id: b.id,
+        name: b.name,
+        specialty: b.specialty,
+        whatsapp: b.whatsapp,
+      })),
+    );
+    setAppointments(
+      (apptRes.data ?? []).map((a) => ({
+        id: a.id,
+        clientId: a.client_id,
+        barberId: a.barber_id,
+        service: a.service,
+        date: a.date,
+        time: a.time,
+      })),
+    );
+    setClients(
+      (clientsRes.data ?? []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        whatsapp: c.whatsapp,
+      })),
+    );
+    setReady(true);
   }, []);
 
   useEffect(() => {
-    if (!window.localStorage.getItem(KEYS.barbers)) {
-      window.localStorage.setItem(KEYS.barbers, JSON.stringify(SEED_BARBERS));
-    }
-    purgePastAppointments();
-    refresh();
-    setReady(true);
-    const handler = () => refresh();
-    window.addEventListener("barbearia:update", handler);
-    window.addEventListener("storage", handler);
-    return () => {
-      window.removeEventListener("barbearia:update", handler);
-      window.removeEventListener("storage", handler);
-    };
+    void refresh();
   }, [refresh]);
 
-  const addClient = useCallback((name: string, whatsapp: string) => {
-    const list = read<Client[]>(KEYS.clients, []);
-    const digits = onlyDigits(whatsapp);
-    const existing = list.find((c) => onlyDigits(c.whatsapp) === digits);
-    if (existing) {
-      const updated = list.map((c) =>
-        c.id === existing.id ? { ...c, name } : c,
-      );
-      write(KEYS.clients, updated);
-      return { ...existing, name };
-    }
-    const client: Client = { id: uid(), name, whatsapp };
-    write(KEYS.clients, [...list, client]);
-    return client;
-  }, []);
+  const addClient = useCallback(
+    async (name: string, whatsapp: string): Promise<Client | null> => {
+      const { data, error } = await supabase
+        .from("clients")
+        .insert({ name, whatsapp })
+        .select()
+        .single();
+      if (error || !data) return null;
+      void refresh();
+      return { id: data.id, name: data.name, whatsapp: data.whatsapp };
+    },
+    [refresh],
+  );
 
-  const removeClient = useCallback((id: string) => {
-    write(
-      KEYS.clients,
-      read<Client[]>(KEYS.clients, []).filter((c) => c.id !== id),
-    );
-    write(
-      KEYS.appointments,
-      read<Appointment[]>(KEYS.appointments, []).filter((a) => a.clientId !== id),
-    );
-  }, []);
+  const removeClient = useCallback(
+    async (id: string) => {
+      await supabase.from("clients").delete().eq("id", id);
+      void refresh();
+    },
+    [refresh],
+  );
 
-  const addBarber = useCallback((barber: Omit<Barber, "id">) => {
-    const created: Barber = { id: uid(), ...barber };
-    write(KEYS.barbers, [...read<Barber[]>(KEYS.barbers, []), created]);
-    return created;
-  }, []);
+  const addBarber = useCallback(
+    async (barber: Omit<Barber, "id">) => {
+      await supabase.from("barbers").insert({
+        name: barber.name,
+        specialty: barber.specialty,
+        whatsapp: barber.whatsapp,
+      });
+      void refresh();
+    },
+    [refresh],
+  );
 
-  const removeBarber = useCallback((id: string) => {
-    write(
-      KEYS.barbers,
-      read<Barber[]>(KEYS.barbers, []).filter((b) => b.id !== id),
-    );
-    write(
-      KEYS.appointments,
-      read<Appointment[]>(KEYS.appointments, []).filter((a) => a.barberId !== id),
-    );
-  }, []);
+  const removeBarber = useCallback(
+    async (id: string) => {
+      await supabase.from("barbers").delete().eq("id", id);
+      void refresh();
+    },
+    [refresh],
+  );
 
-  const addAppointment = useCallback((data: Omit<Appointment, "id">) => {
-    const created: Appointment = { id: uid(), ...data };
-    write(KEYS.appointments, [
-      ...read<Appointment[]>(KEYS.appointments, []),
-      created,
-    ]);
-    return created;
-  }, []);
+  const addAppointment = useCallback(
+    async (data: Omit<Appointment, "id">) => {
+      const { error } = await supabase.from("appointments").insert({
+        client_id: data.clientId,
+        barber_id: data.barberId,
+        service: data.service,
+        date: data.date,
+        time: data.time,
+      });
+      void refresh();
+      return !error;
+    },
+    [refresh],
+  );
 
-  const removeAppointment = useCallback((id: string) => {
-    write(
-      KEYS.appointments,
-      read<Appointment[]>(KEYS.appointments, []).filter((a) => a.id !== id),
-    );
-  }, []);
+  const removeAppointment = useCallback(
+    async (id: string) => {
+      await supabase.from("appointments").delete().eq("id", id);
+      void refresh();
+    },
+    [refresh],
+  );
 
   const isSlotTaken = useCallback(
     (barberId: string, date: string, time: string) =>
@@ -244,11 +224,18 @@ export function useBarbershop() {
     [appointments],
   );
 
+  const purge = useCallback(async () => {
+    const n = await purgePastAppointments();
+    void refresh();
+    return n;
+  }, [refresh]);
+
   return {
     ready,
     clients,
     barbers,
     appointments,
+    refresh,
     addClient,
     removeClient,
     addBarber,
@@ -256,6 +243,6 @@ export function useBarbershop() {
     addAppointment,
     removeAppointment,
     isSlotTaken,
-    purgePastAppointments,
+    purgePastAppointments: purge,
   };
 }
