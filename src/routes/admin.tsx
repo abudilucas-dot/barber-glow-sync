@@ -79,8 +79,8 @@ function AdminPage() {
         </div>
         <Button
           variant="outline"
-          onClick={() => {
-            const n = purgePastAppointments();
+          onClick={async () => {
+            const n = await purgePastAppointments();
             toast.success(
               n > 0
                 ? `${n} agendamento(s) vencido(s) removido(s).`
