@@ -14,7 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      appointments: {
+        Row: {
+          barber_id: string
+          client_id: string
+          created_at: string
+          date: string
+          id: string
+          service: string
+          time: string
+        }
+        Insert: {
+          barber_id: string
+          client_id: string
+          created_at?: string
+          date: string
+          id?: string
+          service: string
+          time: string
+        }
+        Update: {
+          barber_id?: string
+          client_id?: string
+          created_at?: string
+          date?: string
+          id?: string
+          service?: string
+          time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointments_barber_id_fkey"
+            columns: ["barber_id"]
+            isOneToOne: false
+            referencedRelation: "barbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      barbers: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          specialty: string
+          whatsapp: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          specialty?: string
+          whatsapp: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          specialty?: string
+          whatsapp?: string
+        }
+        Relationships: []
+      }
+      clients: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          whatsapp: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          whatsapp: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          whatsapp?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
