@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export type Client = { id: string; name: string; whatsapp: string };
 export type Barber = {
