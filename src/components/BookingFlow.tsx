@@ -58,7 +58,7 @@ export function BookingFlow() {
     setStep(1);
   }
 
-  function confirm() {
+  async function confirm() {
     if (!service) {
       toast.error("Escolha um serviço.");
       return;
@@ -76,14 +76,22 @@ export function BookingFlow() {
       return;
     }
 
-    const client = addClient(name.trim(), phone);
-    addAppointment({
+    const client = await addClient(name.trim(), phone);
+    if (!client) {
+      toast.error("Não foi possível salvar seu cadastro. Tente novamente.");
+      return;
+    }
+    const ok = await addAppointment({
       clientId: client.id,
       barberId: barber.id,
       service,
       date,
       time,
     });
+    if (!ok) {
+      toast.error("Esse horário acabou de ser ocupado. Escolha outro.");
+      return;
+    }
 
     const message = `Olá ${barber.name}! Sou o(a) ${client.name}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time}.`;
     window.open(waLink(barber.whatsapp, message), "_blank", "noopener");
