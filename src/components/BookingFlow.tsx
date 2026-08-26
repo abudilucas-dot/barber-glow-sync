@@ -47,17 +47,34 @@ export function BookingFlow() {
 
   function submitIdentity(e: React.FormEvent) {
     e.preventDefault();
-    if (name.trim().length < 3) return toast.error("Informe seu nome completo.");
-    if (onlyDigits(phone).length < 10)
-      return toast.error("Informe um WhatsApp válido com DDD.");
+    if (name.trim().length < 3) {
+      toast.error("Informe seu nome completo.");
+      return;
+    }
+    if (onlyDigits(phone).length < 10) {
+      toast.error("Informe um WhatsApp válido com DDD.");
+      return;
+    }
     setStep(1);
   }
 
   function confirm() {
-    if (!service) return toast.error("Escolha um serviço.");
-    if (!barber) return toast.error("Escolha um barbeiro.");
-    if (!date) return toast.error("Escolha um dia.");
-    if (!time) return toast.error("Escolha um horário.");
+    if (!service) {
+      toast.error("Escolha um serviço.");
+      return;
+    }
+    if (!barber) {
+      toast.error("Escolha um barbeiro.");
+      return;
+    }
+    if (!date) {
+      toast.error("Escolha um dia.");
+      return;
+    }
+    if (!time) {
+      toast.error("Escolha um horário.");
+      return;
+    }
 
     const client = addClient(name.trim(), phone);
     addAppointment({
