@@ -15,7 +15,7 @@ import {
   type Appointment,
 } from "@/lib/barber-store";
 
-export const Route = createFileRoute("/admin")({
+export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
     meta: [
       { title: "Painel de Gestão — Navalha de Ouro" },
