@@ -1,5 +1,5 @@
 import { auth, defineMcp } from "@lovable.dev/mcp-js";
-import type { AnyToolDefinition } from "@lovable.dev/mcp-js";
+
 import listBarbers from "./tools/list-barbers";
 import listServices from "./tools/list-services";
 import listClients from "./tools/list-clients";
@@ -27,5 +27,5 @@ export default defineMcp({
     listAppointments,
     createAppointment,
     cancelAppointment,
-  ] as unknown as AnyToolDefinition[],
+  ] as unknown as Parameters<typeof defineMcp>[0]["tools"],
 });
