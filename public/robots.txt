@@ -12,3 +12,5 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+Sitemap: https://barber-glow-sync.lovable.app/sitemap.xml
