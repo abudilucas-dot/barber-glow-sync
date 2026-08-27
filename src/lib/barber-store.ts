@@ -114,11 +114,13 @@ export function useBarbershop() {
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [barbersRes, apptRes, clientsRes] = await Promise.all([
-      supabase.from("barbers").select("*").order("created_at"),
-      supabase.from("appointments").select("*").order("date").order("time"),
-      supabase.from("clients").select("*").order("created_at"),
-    ]);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const signedIn = Boolean(sessionData.session);
+
+    const barbersRes = await supabase
+      .from("barbers")
+      .select("*")
+      .order("created_at");
     setBarbers(
       (barbersRes.data ?? []).map((b) => ({
         id: b.id,
@@ -127,25 +129,47 @@ export function useBarbershop() {
         whatsapp: b.whatsapp,
       })),
     );
-    setAppointments(
-      (apptRes.data ?? []).map((a) => ({
-        id: a.id,
-        clientId: a.client_id,
-        barberId: a.barber_id,
-        service: a.service,
-        date: a.date,
-        time: a.time,
-      })),
-    );
-    setClients(
-      (clientsRes.data ?? []).map((c) => ({
-        id: c.id,
-        name: c.name,
-        whatsapp: c.whatsapp,
-      })),
-    );
+
+    if (signedIn) {
+      const [apptRes, clientsRes] = await Promise.all([
+        supabase.from("appointments").select("*").order("date").order("time"),
+        supabase.from("clients").select("*").order("created_at"),
+      ]);
+      setAppointments(
+        (apptRes.data ?? []).map((a) => ({
+          id: a.id,
+          clientId: a.client_id,
+          barberId: a.barber_id,
+          service: a.service,
+          date: a.date,
+          time: a.time,
+        })),
+      );
+      setClients(
+        (clientsRes.data ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          whatsapp: c.whatsapp,
+        })),
+      );
+    } else {
+      // Visitantes veem apenas a disponibilidade (sem dados de clientes).
+      const { data } = await supabase.rpc("get_booked_slots");
+      setAppointments(
+        (data ?? []).map((s, i) => ({
+          id: `slot-${i}`,
+          clientId: "",
+          barberId: s.barber_id,
+          service: "",
+          date: s.date,
+          time: s.time,
+        })),
+      );
+      setClients([]);
+    }
     setReady(true);
   }, []);
+
 
   useEffect(() => {
     void refresh();
