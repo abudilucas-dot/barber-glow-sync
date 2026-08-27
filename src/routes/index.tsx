@@ -21,7 +21,9 @@ export const Route = createFileRoute("/")({
         content:
           "Agende corte, barba ou combo com o barbeiro da sua preferência. Segunda a sábado, 09h às 19h.",
       },
+      { property: "og:url", content: "https://barber-glow-sync.lovable.app/" },
     ],
+    links: [{ rel: "canonical", href: "https://barber-glow-sync.lovable.app/" }],
   }),
   component: Index,
 });
