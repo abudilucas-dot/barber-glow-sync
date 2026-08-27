@@ -29,7 +29,10 @@ export const Route = createFileRoute("/_authenticated/admin")({
         property: "og:description",
         content: "Clientes, barbeiros e agenda completa da barbearia em um só lugar.",
       },
+      { property: "og:url", content: "https://barber-glow-sync.lovable.app/admin" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
+    links: [{ rel: "canonical", href: "https://barber-glow-sync.lovable.app/admin" }],
   }),
   component: AdminPage,
 });
