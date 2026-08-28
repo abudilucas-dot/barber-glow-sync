@@ -60,21 +60,34 @@ function AuthPage() {
     e.preventDefault();
     setBusy(true);
     if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: `${window.location.origin}${next}`,
         },
       });
-      setBusy(false);
       if (error) {
+        setBusy(false);
         toast.error(error.message);
         return;
       }
-      toast.success("Confirme seu e-mail para ativar o acesso.");
+      if (data.session) {
+        toast.success("Conta criada! Entrando...");
+        window.location.replace(next);
+        return;
+      }
+      // Sem sessão imediata: tenta login direto com a senha informada.
+      const signIn = await supabase.auth.signInWithPassword({ email, password });
+      setBusy(false);
+      if (signIn.error) {
+        toast.error(signIn.error.message);
+        return;
+      }
+      window.location.replace(next);
       return;
     }
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) {
