@@ -177,17 +177,22 @@ export function useBarbershop() {
 
   const addClient = useCallback(
     async (name: string, whatsapp: string): Promise<Client | null> => {
-      const { data, error } = await supabase
+      // Visitantes não podem ler a tabela, então geramos o id no cliente
+      // e inserimos sem pedir os dados de volta.
+      const id =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : uid();
+      const { error } = await supabase
         .from("clients")
-        .insert({ name, whatsapp })
-        .select()
-        .single();
-      if (error || !data) return null;
+        .insert({ id, name, whatsapp });
+      if (error) return null;
       void refresh();
-      return { id: data.id, name: data.name, whatsapp: data.whatsapp };
+      return { id, name, whatsapp };
     },
     [refresh],
   );
+
 
   const removeClient = useCallback(
     async (id: string) => {
