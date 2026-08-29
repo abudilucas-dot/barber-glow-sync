@@ -43,8 +43,10 @@ function AdminPage() {
     barbers,
     appointments,
     addClient,
+    updateClient,
     removeClient,
     addBarber,
+    updateBarber,
     removeBarber,
     removeAppointment,
     purgePastAppointments,
@@ -56,6 +58,61 @@ function AdminPage() {
     specialty: "",
     whatsapp: "",
   });
+  const [editClient, setEditClient] = useState<{
+    id: string;
+    name: string;
+    whatsapp: string;
+  } | null>(null);
+  const [editBarber, setEditBarber] = useState<{
+    id: string;
+    name: string;
+    specialty: string;
+    whatsapp: string;
+  } | null>(null);
+
+  async function saveClient() {
+    if (!editClient) return;
+    if (
+      editClient.name.trim().length < 3 ||
+      onlyDigits(editClient.whatsapp).length < 10
+    ) {
+      toast.error("Preencha nome e WhatsApp válidos.");
+      return;
+    }
+    const ok = await updateClient(editClient.id, {
+      name: editClient.name.trim(),
+      whatsapp: editClient.whatsapp,
+    });
+    if (!ok) {
+      toast.error("Não foi possível salvar as alterações.");
+      return;
+    }
+    setEditClient(null);
+    toast.success("Cliente atualizado.");
+  }
+
+  async function saveBarber() {
+    if (!editBarber) return;
+    if (
+      editBarber.name.trim().length < 3 ||
+      onlyDigits(editBarber.whatsapp).length < 10
+    ) {
+      toast.error("Preencha nome e WhatsApp válidos.");
+      return;
+    }
+    const ok = await updateBarber(editBarber.id, {
+      name: editBarber.name.trim(),
+      specialty: editBarber.specialty.trim(),
+      whatsapp: editBarber.whatsapp,
+    });
+    if (!ok) {
+      toast.error("Não foi possível salvar as alterações.");
+      return;
+    }
+    setEditBarber(null);
+    toast.success("Barbeiro atualizado.");
+  }
+
 
   const sorted = [...appointments].sort((a, b) =>
     `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`),
