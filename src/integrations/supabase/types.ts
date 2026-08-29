@@ -146,6 +146,10 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      upsert_client: {
+        Args: { _name: string; _whatsapp: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "staff"
