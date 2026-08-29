@@ -351,7 +351,6 @@ function AdminPage() {
                       </li>
                     ),
                   )}
-                  ))}
                 </ul>
               )}
             </div>
