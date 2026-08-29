@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { ArrowLeft, Eraser, Plus, Trash2, Users, Scissors, CalendarClock } from "lucide-react";
+import { ArrowLeft, Check, Eraser, Pencil, Plus, Trash2, Users, Scissors, CalendarClock, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
