@@ -177,22 +177,26 @@ export function useBarbershop() {
 
   const addClient = useCallback(
     async (name: string, whatsapp: string): Promise<Client | null> => {
-      // Visitantes não podem ler a tabela, então geramos o id no cliente
-      // e inserimos sem pedir os dados de volta.
-      const id =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : uid();
-      const { error } = await supabase
-        .from("clients")
-        .insert({ id, name, whatsapp });
-      if (error) return null;
+      // Reaproveita o cadastro existente pelo WhatsApp (evita duplicados).
+      const { data, error } = await supabase.rpc("upsert_client", {
+        _name: name,
+        _whatsapp: whatsapp,
+      });
+      if (error || !data) return null;
       void refresh();
-      return { id, name, whatsapp };
+      return { id: data as string, name, whatsapp };
     },
     [refresh],
   );
 
+  const updateClient = useCallback(
+    async (id: string, patch: Partial<Omit<Client, "id">>) => {
+      const { error } = await supabase.from("clients").update(patch).eq("id", id);
+      void refresh();
+      return !error;
+    },
+    [refresh],
+  );
 
   const removeClient = useCallback(
     async (id: string) => {
@@ -210,6 +214,15 @@ export function useBarbershop() {
         whatsapp: barber.whatsapp,
       });
       void refresh();
+    },
+    [refresh],
+  );
+
+  const updateBarber = useCallback(
+    async (id: string, patch: Partial<Omit<Barber, "id">>) => {
+      const { error } = await supabase.from("barbers").update(patch).eq("id", id);
+      void refresh();
+      return !error;
     },
     [refresh],
   );
