@@ -274,30 +274,83 @@ function AdminPage() {
                 <Empty text="Nenhum cliente cadastrado." />
               ) : (
                 <ul className="space-y-2">
-                  {clients.map((c) => (
-                    <li
-                      key={c.id}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-4 py-3"
-                    >
-                      <div className="flex-1">
-                        <span className="block text-sm font-medium">{c.name}</span>
-                        <span className="block text-xs text-muted-foreground">
-                          {c.whatsapp}
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        aria-label={`Excluir ${c.name}`}
-                        onClick={() => {
-                          removeClient(c.id);
-                          toast.success("Cliente excluído.");
-                        }}
+                  {clients.map((c) =>
+                    editClient?.id === c.id ? (
+                      <li
+                        key={c.id}
+                        className="space-y-3 rounded-xl border border-gold/50 bg-surface-2/40 px-4 py-3"
                       >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </li>
+                        <Input
+                          value={editClient.name}
+                          onChange={(e) =>
+                            setEditClient({ ...editClient, name: e.target.value })
+                          }
+                          aria-label="Nome do cliente"
+                        />
+                        <Input
+                          value={editClient.whatsapp}
+                          onChange={(e) =>
+                            setEditClient({
+                              ...editClient,
+                              whatsapp: maskPhone(e.target.value),
+                            })
+                          }
+                          inputMode="tel"
+                          aria-label="WhatsApp do cliente"
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={saveClient}>
+                            <Check className="size-4" /> Salvar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditClient(null)}
+                          >
+                            <X className="size-4" /> Cancelar
+                          </Button>
+                        </div>
+                      </li>
+                    ) : (
+                      <li
+                        key={c.id}
+                        className="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-4 py-3"
+                      >
+                        <div className="flex-1">
+                          <span className="block text-sm font-medium">{c.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {c.whatsapp}
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Editar ${c.name}`}
+                          onClick={() =>
+                            setEditClient({
+                              id: c.id,
+                              name: c.name,
+                              whatsapp: c.whatsapp,
+                            })
+                          }
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          aria-label={`Excluir ${c.name}`}
+                          onClick={() => {
+                            removeClient(c.id);
+                            toast.success("Cliente excluído.");
+                          }}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </li>
+                    ),
+                  )}
                   ))}
                 </ul>
               )}
