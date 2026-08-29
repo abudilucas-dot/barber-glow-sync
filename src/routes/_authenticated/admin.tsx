@@ -429,34 +429,97 @@ function AdminPage() {
                 <Empty text="Nenhum barbeiro cadastrado." />
               ) : (
                 <ul className="space-y-2">
-                  {barbers.map((b) => (
-                    <li
-                      key={b.id}
-                      className="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-4 py-3"
-                    >
-                      <div className="flex-1">
-                        <span className="block text-sm font-medium">{b.name}</span>
-                        <span className="block text-xs text-gold">
-                          {b.specialty}
-                        </span>
-                        <span className="block text-xs text-muted-foreground">
-                          {b.whatsapp}
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive hover:text-destructive"
-                        aria-label={`Excluir ${b.name}`}
-                        onClick={() => {
-                          removeBarber(b.id);
-                          toast.success("Barbeiro excluído.");
-                        }}
+                  {barbers.map((b) =>
+                    editBarber?.id === b.id ? (
+                      <li
+                        key={b.id}
+                        className="space-y-3 rounded-xl border border-gold/50 bg-surface-2/40 px-4 py-3"
                       >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </li>
-                  ))}
+                        <Input
+                          value={editBarber.name}
+                          onChange={(e) =>
+                            setEditBarber({ ...editBarber, name: e.target.value })
+                          }
+                          aria-label="Nome do barbeiro"
+                        />
+                        <Input
+                          value={editBarber.specialty}
+                          onChange={(e) =>
+                            setEditBarber({
+                              ...editBarber,
+                              specialty: e.target.value,
+                            })
+                          }
+                          aria-label="Especialidade"
+                        />
+                        <Input
+                          value={editBarber.whatsapp}
+                          onChange={(e) =>
+                            setEditBarber({
+                              ...editBarber,
+                              whatsapp: maskPhone(e.target.value),
+                            })
+                          }
+                          inputMode="tel"
+                          aria-label="WhatsApp comercial"
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={saveBarber}>
+                            <Check className="size-4" /> Salvar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditBarber(null)}
+                          >
+                            <X className="size-4" /> Cancelar
+                          </Button>
+                        </div>
+                      </li>
+                    ) : (
+                      <li
+                        key={b.id}
+                        className="flex items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-4 py-3"
+                      >
+                        <div className="flex-1">
+                          <span className="block text-sm font-medium">{b.name}</span>
+                          <span className="block text-xs text-gold">
+                            {b.specialty}
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            {b.whatsapp}
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Editar ${b.name}`}
+                          onClick={() =>
+                            setEditBarber({
+                              id: b.id,
+                              name: b.name,
+                              specialty: b.specialty,
+                              whatsapp: b.whatsapp,
+                            })
+                          }
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive hover:text-destructive"
+                          aria-label={`Excluir ${b.name}`}
+                          onClick={() => {
+                            removeBarber(b.id);
+                            toast.success("Barbeiro excluído.");
+                          }}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </li>
+                    ),
+                  )}
                 </ul>
               )}
             </div>
