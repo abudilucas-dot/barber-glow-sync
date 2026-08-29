@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Check,
@@ -27,6 +27,21 @@ import {
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Identificação", "Agendamento", "Confirmação"] as const;
+const SAVED_KEY = "navalha:cliente";
+
+type SavedClient = { name: string; phone: string };
+
+function readSaved(): SavedClient | null {
+  try {
+    const raw = localStorage.getItem(SAVED_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedClient;
+    if (!parsed?.name || !parsed?.phone) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
 
 export function BookingFlow() {
   const {
@@ -40,10 +55,20 @@ export function BookingFlow() {
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [saved, setSaved] = useState<SavedClient | null>(null);
   const [service, setService] = useState<string>("");
   const [barber, setBarber] = useState<Barber | null>(null);
   const [date, setDate] = useState(days[0]?.iso ?? "");
   const [time, setTime] = useState("");
+
+  useEffect(() => {
+    const s = readSaved();
+    if (s) {
+      setSaved(s);
+      setName(s.name);
+      setPhone(s.phone);
+    }
+  }, []);
 
   function submitIdentity(e: React.FormEvent) {
     e.preventDefault();
@@ -93,6 +118,16 @@ export function BookingFlow() {
       return;
     }
 
+    try {
+      localStorage.setItem(
+        SAVED_KEY,
+        JSON.stringify({ name: client.name, phone } satisfies SavedClient),
+      );
+      setSaved({ name: client.name, phone });
+    } catch {
+      /* armazenamento indisponível */
+    }
+
     const message = `Olá ${barber.name}! Sou o(a) ${client.name}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time}.`;
     window.open(waLink(barber.whatsapp, message), "_blank", "noopener");
     setStep(2);
@@ -101,12 +136,22 @@ export function BookingFlow() {
 
   function reset() {
     setStep(0);
-    setName("");
-    setPhone("");
     setService("");
     setBarber(null);
     setDate(days[0]?.iso ?? "");
     setTime("");
+  }
+
+  function signOutClient() {
+    try {
+      localStorage.removeItem(SAVED_KEY);
+    } catch {
+      /* ignore */
+    }
+    setSaved(null);
+    setName("");
+    setPhone("");
+    setStep(0);
   }
 
   return (
