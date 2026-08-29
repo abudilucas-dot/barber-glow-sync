@@ -184,12 +184,35 @@ export function BookingFlow() {
 
       {step === 0 && (
         <form onSubmit={submitIdentity} className="space-y-5">
-          <div>
-            <h3 className="text-xl">Vamos começar</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Precisamos do seu nome e WhatsApp para reservar a cadeira.
-            </p>
-          </div>
+          {saved ? (
+            <div className="rounded-xl border border-gold/40 bg-accent/40 p-4">
+              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+                Já é cliente da casa
+              </p>
+              <p className="mt-1 text-sm font-semibold text-gold">{saved.name}</p>
+              <p className="text-xs text-muted-foreground">{saved.phone}</p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Button type="submit" className="flex-1">
+                  Continuar como {saved.name.split(" ")[0]}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={signOutClient}
+                  className="sm:w-44"
+                >
+                  Usar outro cadastro
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h3 className="text-xl">Vamos começar</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Precisamos do seu nome e WhatsApp para reservar a cadeira.
+              </p>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="cli-nome">Nome completo</Label>
             <Input
