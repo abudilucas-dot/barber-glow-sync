@@ -35,9 +35,9 @@ export const TIME_SLOTS = Array.from({ length: 10 }, (_, i) =>
 export const SHOP = {
   name: "Navalha de Ouro",
   tagline: "Barbearia & Clube do Cavalheiro",
-  instagram: "https://instagram.com/navalhadeouro",
-  maps: "https://maps.google.com/?q=Barbearia+Navalha+de+Ouro",
-  ownerWhatsapp: "5511999990000",
+  instagram: "https://www.instagram.com/lucas_abudi",
+  maps: "https://www.google.com/maps/place/CEEP+Maring%C3%A1/@-23.4083326,-51.9745444,16z/data=!4m6!3m5!1s0x94ecd7000232efe5:0x738d26a1674420f2!8m2!3d-23.4037081!4d-51.9797095!16s%2Fg%2F11wbg1hftj",
+  ownerWhatsapp: "5544991298462",
   hours: [
     { days: "Segunda a Sexta", time: "09h às 19h" },
     { days: "Sábado", time: "09h às 18h" },
