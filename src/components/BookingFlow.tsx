@@ -118,6 +118,16 @@ export function BookingFlow() {
       return;
     }
 
+    try {
+      localStorage.setItem(
+        SAVED_KEY,
+        JSON.stringify({ name: client.name, phone } satisfies SavedClient),
+      );
+      setSaved({ name: client.name, phone });
+    } catch {
+      /* armazenamento indisponível */
+    }
+
     const message = `Olá ${barber.name}! Sou o(a) ${client.name}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time}.`;
     window.open(waLink(barber.whatsapp, message), "_blank", "noopener");
     setStep(2);
@@ -126,12 +136,22 @@ export function BookingFlow() {
 
   function reset() {
     setStep(0);
-    setName("");
-    setPhone("");
     setService("");
     setBarber(null);
     setDate(days[0]?.iso ?? "");
     setTime("");
+  }
+
+  function signOutClient() {
+    try {
+      localStorage.removeItem(SAVED_KEY);
+    } catch {
+      /* ignore */
+    }
+    setSaved(null);
+    setName("");
+    setPhone("");
+    setStep(0);
   }
 
   return (
