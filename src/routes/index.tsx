@@ -72,7 +72,13 @@ function Index() {
             Falar com o dono
           </LinkButton>
         </div>
+        <Button asChild variant="outline" className="h-12 justify-center">
+          <Link to="/admin">
+            <ShieldCheck className="size-4" /> Painel de Gestão (equipe)
+          </Link>
+        </Button>
       </nav>
+
 
       <section className="panel-lux mt-10 rounded-2xl p-5 sm:p-7">
         <h2 className="text-xl">Tabela de Preços</h2>
