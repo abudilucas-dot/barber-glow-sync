@@ -1,7 +1,7 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
 import { TIME_SLOTS } from "@/lib/barber-store";
-import { supabaseForRequest } from "@/lib/mcp/supabase";
+import { notAuthenticated, supabaseForUser } from "../supabase";
 
 export default defineTool({
   name: "list_services",
@@ -15,8 +15,9 @@ export default defineTool({
       .describe("Link da barbearia (ex.: navalha-de-ouro). Sem valor, usa a primeira ativa."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  handler: async ({ slug }, extra) => {
-    const supabase = supabaseForRequest(extra);
+  handler: async ({ slug }, ctx) => {
+    if (!ctx.isAuthenticated()) return notAuthenticated();
+    const supabase = supabaseForUser(ctx);
     let query = supabase.from("barbershops").select("*").eq("status", "active");
     if (slug) query = query.eq("slug", slug);
     const { data: shop } = await query.order("created_at").limit(1).maybeSingle();
