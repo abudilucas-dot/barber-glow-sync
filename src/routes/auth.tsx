@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import { SHOP } from "@/lib/barber-store";
+import { PLATFORM } from "@/lib/barber-store";
 
 /** Aceita apenas caminhos relativos da própria aplicação. */
 function safeNext(value: unknown): string {
@@ -113,7 +113,7 @@ function AuthPage() {
     <main className="mx-auto flex min-h-[80vh] w-full max-w-md flex-col justify-center px-4 py-16">
       <div className="panel-lux rounded-2xl p-6 sm:p-8">
         <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-          {SHOP.name}
+          {PLATFORM.name}
         </p>
         <h1 className="mt-2 flex items-center gap-2 text-2xl">
           <KeyRound className="size-5 text-gold" />
