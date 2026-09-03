@@ -255,9 +255,9 @@ function CreateShopCard({
       <Button
         className="mt-5 w-full sm:w-auto"
         onClick={async () => {
-          if (name.trim().length < 3) return toast.error("Informe o nome da barbearia.");
-          if (!finalSlug) return toast.error("Informe um link válido.");
-          if (onlyDigits(whatsapp).length < 10) return toast.error("WhatsApp inválido.");
+          if (name.trim().length < 3) { toast.error("Informe o nome da barbearia."); return; }
+          if (!finalSlug) { toast.error("Informe um link válido."); return; }
+          if (onlyDigits(whatsapp).length < 10) { toast.error("WhatsApp inválido."); return; }
           await onCreate({
             name: name.trim(),
             slug: finalSlug,
@@ -343,8 +343,8 @@ function ShopIdentity({ admin, onSaved }: { admin: Admin; onSaved: () => void })
       <Button
         className="mt-5"
         onClick={async () => {
-          if (form.name.trim().length < 3) return toast.error("Nome inválido.");
-          if (!form.slug) return toast.error("Link inválido.");
+          if (form.name.trim().length < 3) { toast.error("Nome inválido."); return; }
+          if (!form.slug) { toast.error("Link inválido."); return; }
           const ok = await admin.updateShop({
             name: form.name.trim(),
             slug: form.slug,
@@ -355,7 +355,7 @@ function ShopIdentity({ admin, onSaved }: { admin: Admin; onSaved: () => void })
             maps_url: form.maps_url || null,
             owner_whatsapp: form.owner_whatsapp,
           });
-          if (!ok) return toast.error("Não foi possível salvar (o link pode já existir).");
+          if (!ok) { toast.error("Não foi possível salvar (o link pode já existir)."); return; }
           onSaved();
           toast.success("Barbearia atualizada!");
         }}
@@ -391,15 +391,15 @@ function ServicesTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
             className="w-full"
             disabled={limited}
             onClick={async () => {
-              if (form.name.trim().length < 2) return toast.error("Informe o serviço.");
+              if (form.name.trim().length < 2) { toast.error("Informe o serviço."); return; }
               const price = Number(form.price.replace(",", "."));
-              if (!Number.isFinite(price) || price < 0) return toast.error("Preço inválido.");
+              if (!Number.isFinite(price) || price < 0) { toast.error("Preço inválido."); return; }
               const ok = await admin.addService({
                 name: form.name.trim(),
                 price,
                 duration: form.duration.trim() || "30 min",
               });
-              if (!ok) return toast.error("Não foi possível adicionar.");
+              if (!ok) { toast.error("Não foi possível adicionar."); return; }
               setForm({ name: "", price: "", duration: "" });
               toast.success("Serviço adicionado.");
             }}
@@ -429,7 +429,7 @@ function ServicesTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
                   size="sm"
                   onClick={async () => {
                     const price = Number(edit.price.replace(",", "."));
-                    if (!Number.isFinite(price)) return toast.error("Preço inválido.");
+                    if (!Number.isFinite(price)) { toast.error("Preço inválido."); return; }
                     await admin.updateService(s.id, {
                       name: edit.name.trim(),
                       price,
@@ -497,7 +497,7 @@ function HoursTab({ admin }: { admin: Admin }) {
             className="w-full"
             onClick={async () => {
               if (!form.days.trim() || !form.hours.trim())
-                return toast.error("Preencha dias e horário.");
+                { toast.error("Preencha dias e horário."); return; }
               await admin.addHour({ days: form.days.trim(), hours: form.hours.trim() });
               setForm({ days: "", hours: "" });
             }}
@@ -578,14 +578,14 @@ function BarbersTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
             className="w-full"
             disabled={limited}
             onClick={async () => {
-              if (form.name.trim().length < 3) return toast.error("Informe o nome.");
-              if (onlyDigits(form.whatsapp).length < 10) return toast.error("WhatsApp inválido.");
+              if (form.name.trim().length < 3) { toast.error("Informe o nome."); return; }
+              if (onlyDigits(form.whatsapp).length < 10) { toast.error("WhatsApp inválido."); return; }
               const ok = await admin.addBarber({
                 name: form.name.trim(),
                 specialty: form.specialty.trim(),
                 whatsapp: form.whatsapp,
               });
-              if (!ok) return toast.error("Não foi possível adicionar.");
+              if (!ok) { toast.error("Não foi possível adicionar."); return; }
               setForm({ name: "", specialty: "", whatsapp: "" });
             }}
           >
@@ -676,10 +676,10 @@ function ClientsTab({ admin }: { admin: Admin }) {
           <Button
             className="w-full"
             onClick={async () => {
-              if (form.name.trim().length < 3) return toast.error("Informe o nome.");
-              if (onlyDigits(form.whatsapp).length < 10) return toast.error("WhatsApp inválido.");
+              if (form.name.trim().length < 3) { toast.error("Informe o nome."); return; }
+              if (onlyDigits(form.whatsapp).length < 10) { toast.error("WhatsApp inválido."); return; }
               const ok = await admin.addClient(form.name.trim(), form.whatsapp);
-              if (!ok) return toast.error("Não foi possível salvar.");
+              if (!ok) { toast.error("Não foi possível salvar."); return; }
               setForm({ name: "", whatsapp: "" });
             }}
           >
