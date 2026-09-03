@@ -17,6 +17,22 @@
     },
     "tools": [
       {
+        "name": "list_shops",
+        "title": "Listar barbearias da plataforma",
+        "description": "Lista as barbearias visíveis para o usuário com slug, link público, plano (teste ou pro), status e fim do período de teste.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
         "name": "list_services",
         "title": "Serviços e informações da barbearia",
         "description": "Retorna os dados de uma barbearia da plataforma: serviços com preços, horário de funcionamento, links e horários possíveis de agendamento.",
