@@ -13,13 +13,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Plataforma para barbearias: crie sua página com link próprio, tabela de preços, equipe e agendamento pelo WhatsApp. Comece grátis.",
+          "Plataforma para barbearias: crie sua página com link próprio, tabela de preços, equipe e agendamento pelo WhatsApp. Teste 30 dias grátis.",
       },
       { property: "og:title", content: "BarberLink — A plataforma das barbearias" },
       {
         property: "og:description",
         content:
-          "Página pronta, link exclusivo e agenda online para a sua barbearia. Comece grátis e evolua para o plano Pro.",
+          "Página pronta, link exclusivo e agenda online para a sua barbearia. Teste 30 dias grátis e continue no plano Pro.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -59,7 +59,7 @@ function Home() {
       <div className="mt-8 grid gap-3 sm:grid-cols-2">
         <Button asChild size="lg" className="h-14 text-base">
           <Link to="/admin">
-            <Sparkles className="size-5" /> Criar minha barbearia grátis
+            <Sparkles className="size-5" /> Testar 30 dias grátis
           </Link>
         </Button>
         <Button asChild variant="outline" size="lg" className="h-14 text-base">
@@ -110,10 +110,11 @@ function Home() {
         <div className="gold-rule my-4" />
         <ol className="space-y-3 text-sm">
           {[
-            "O dono cria a conta e monta a barbearia em minutos.",
+            "O dono cria a conta e testa a plataforma por 30 dias grátis.",
             "Edita identidade visual, serviços, preços, equipe e horários.",
             "Recebe um link exclusivo do tipo /sua-barbearia para divulgar.",
             "Os clientes agendam e a conversa segue no WhatsApp do barbeiro.",
+            "Ao fim do teste, assine o Pro (R$ 49,90/mês ou R$ 450/ano) para seguir no ar.",
           ].map((t) => (
             <li key={t} className="flex gap-3">
               <Check className="mt-0.5 size-4 shrink-0 text-gold" />
