@@ -3,7 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { SHOP } from "@/lib/barber-store";
+import { PLATFORM } from "@/lib/barber-store";
 
 type OAuthResult = {
   redirect_url?: string;
@@ -97,7 +97,7 @@ function Consent() {
     <main className="mx-auto flex min-h-[80vh] w-full max-w-md flex-col justify-center px-4 py-16">
       <div className="panel-lux rounded-2xl p-6 sm:p-8">
         <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-          {SHOP.name}
+          {PLATFORM.name}
         </p>
         <h1 className="mt-2 text-2xl">
           <span className="text-gilded">Conectar {clientName}</span>
