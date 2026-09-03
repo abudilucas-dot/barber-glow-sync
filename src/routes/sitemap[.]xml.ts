@@ -18,6 +18,42 @@ export const Route = createFileRoute("/sitemap.xml")({
           { path: "/precos", changefreq: "monthly", priority: "0.8" },
         ];
 
+        // Barbearias no ar (Pro ou dentro do teste de 30 dias).
+        try {
+          const { createClient } = await import("@supabase/supabase-js");
+          const key = process.env['SUPABASE_PUBLISHABLE_KEY'] ?? "";
+          const client = createClient(process.env['SUPABASE_URL'] ?? "", key, {
+            auth: { persistSession: false },
+            global: {
+              fetch: (input, init) => {
+                const h = new Headers(init?.headers);
+                if (key.startsWith("sb_") && h.get("Authorization") === `Bearer ${key}`) {
+                  h.delete("Authorization");
+                }
+                h.set("apikey", key);
+                return fetch(input, { ...init, headers: h });
+              },
+            },
+          });
+          const { data } = await client
+            .from("barbershops")
+            .select("slug, plan, trial_ends_at, status")
+            .eq("status", "active");
+          for (const shop of (data ?? []) as Array<{
+            slug: string;
+            plan: string;
+            trial_ends_at: string;
+          }>) {
+            const live =
+              shop.plan === "pro" || new Date(shop.trial_ends_at).getTime() > Date.now();
+            if (live) {
+              entries.push({ path: `/${shop.slug}`, changefreq: "weekly", priority: "0.9" });
+            }
+          }
+        } catch (e) {
+          console.error("sitemap: falha ao listar barbearias", e);
+        }
+
         const urls = entries.map((e) =>
           [
             `  <url>`,

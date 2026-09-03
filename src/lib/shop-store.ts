@@ -17,7 +17,21 @@ export type Shop = {
   primaryColor: string;
   plan: string;
   status: string;
+  trialEndsAt: string;
 };
+
+/** Barbearia no ar? Pro ativo ou dentro dos 30 dias de teste. */
+export function isShopLive(shop: Pick<Shop, "plan" | "status" | "trialEndsAt">) {
+  return (
+    shop.status === "active" &&
+    (shop.plan === "pro" || new Date(shop.trialEndsAt).getTime() > Date.now())
+  );
+}
+
+export function trialDaysLeft(shop: Pick<Shop, "trialEndsAt">) {
+  const ms = new Date(shop.trialEndsAt).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / 86_400_000));
+}
 
 export type ShopService = {
   id: string;
@@ -54,6 +68,7 @@ type ShopRow = {
   primary_color: string;
   plan: string;
   status: string;
+  trial_ends_at: string;
 };
 
 export function mapShop(r: ShopRow): Shop {
@@ -71,6 +86,7 @@ export function mapShop(r: ShopRow): Shop {
     primaryColor: r.primary_color,
     plan: r.plan,
     status: r.status,
+    trialEndsAt: r.trial_ends_at,
   };
 }
 
