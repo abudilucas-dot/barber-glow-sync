@@ -18,8 +18,8 @@
     "tools": [
       {
         "name": "list_services",
-        "title": "Serviços e informações da loja",
-        "description": "Retorna a tabela de serviços com preços, o horário de funcionamento, os links da barbearia e os horários disponíveis por dia.",
+        "title": "Serviços e informações da barbearia",
+        "description": "Retorna os dados de uma barbearia da plataforma: serviços com preços, horário de funcionamento, links e horários possíveis de agendamento.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -28,7 +28,12 @@
         "inputSchema": {
           "$schema": "http://json-schema.org/draft-07/schema#",
           "type": "object",
-          "properties": {}
+          "properties": {
+            "slug": {
+              "description": "Link da barbearia (ex.: navalha-de-ouro). Sem valor, usa a primeira ativa.",
+              "type": "string"
+            }
+          }
         },
         "outputSchema": null
       },
