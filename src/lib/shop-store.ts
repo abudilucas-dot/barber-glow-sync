@@ -324,7 +324,7 @@ export function useShopAdmin(shopId: string | null) {
   }, [refresh]);
 
   const updateShop = useCallback(
-    async (patch: Partial<Record<string, string | null>>) => {
+    async (patch: TablesUpdate<"barbershops">) => {
       if (!shopId) return false;
       const { error } = await supabase.from("barbershops").update(patch).eq("id", shopId);
       await refresh();
