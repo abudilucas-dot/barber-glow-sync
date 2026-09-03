@@ -22,6 +22,7 @@ export type Database = {
           date: string
           id: string
           service: string
+          shop_id: string | null
           time: string
         }
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           date: string
           id?: string
           service: string
+          shop_id?: string | null
           time: string
         }
         Update: {
@@ -40,6 +42,7 @@ export type Database = {
           date?: string
           id?: string
           service?: string
+          shop_id?: string | null
           time?: string
         }
         Relationships: [
@@ -57,6 +60,13 @@ export type Database = {
             referencedRelation: "clients"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "appointments_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
         ]
       }
       barbers: {
@@ -64,6 +74,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          shop_id: string | null
           specialty: string
           whatsapp: string
         }
@@ -71,6 +82,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          shop_id?: string | null
           specialty?: string
           whatsapp: string
         }
@@ -78,8 +90,71 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          shop_id?: string | null
           specialty?: string
           whatsapp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "barbers_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      barbershops: {
+        Row: {
+          about: string
+          created_at: string
+          hero_url: string | null
+          id: string
+          instagram_url: string | null
+          maps_url: string | null
+          name: string
+          owner_id: string
+          owner_whatsapp: string
+          plan: string
+          primary_color: string
+          slug: string
+          status: string
+          tagline: string
+          updated_at: string
+        }
+        Insert: {
+          about?: string
+          created_at?: string
+          hero_url?: string | null
+          id?: string
+          instagram_url?: string | null
+          maps_url?: string | null
+          name: string
+          owner_id: string
+          owner_whatsapp?: string
+          plan?: string
+          primary_color?: string
+          slug: string
+          status?: string
+          tagline?: string
+          updated_at?: string
+        }
+        Update: {
+          about?: string
+          created_at?: string
+          hero_url?: string | null
+          id?: string
+          instagram_url?: string | null
+          maps_url?: string | null
+          name?: string
+          owner_id?: string
+          owner_whatsapp?: string
+          plan?: string
+          primary_color?: string
+          slug?: string
+          status?: string
+          tagline?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -88,21 +163,111 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          shop_id: string | null
           whatsapp: string
         }
         Insert: {
           created_at?: string
           id?: string
           name: string
+          shop_id?: string | null
           whatsapp: string
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
+          shop_id?: string | null
           whatsapp?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clients_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_hours: {
+        Row: {
+          created_at: string
+          days: string
+          hours: string
+          id: string
+          shop_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days: string
+          hours: string
+          id?: string
+          shop_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days?: string
+          hours?: string
+          id?: string
+          shop_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_hours_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_services: {
+        Row: {
+          created_at: string
+          duration: string
+          id: string
+          name: string
+          price: number
+          shop_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration?: string
+          id?: string
+          name: string
+          price?: number
+          shop_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration?: string
+          id?: string
+          name?: string
+          price?: number
+          shop_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_services_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -130,14 +295,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      get_booked_slots: {
-        Args: { _from?: string; _to?: string }
-        Returns: {
-          barber_id: string
-          date: string
-          time: string
-        }[]
-      }
+      get_booked_slots:
+        | {
+            Args: { _from?: string; _to?: string }
+            Returns: {
+              barber_id: string
+              date: string
+              time: string
+            }[]
+          }
+        | {
+            Args: { _from?: string; _shop_id: string; _to?: string }
+            Returns: {
+              barber_id: string
+              date: string
+              time: string
+            }[]
+          }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -145,9 +319,13 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_shop_owner: {
+        Args: { _shop_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
       upsert_client: {
-        Args: { _name: string; _whatsapp: string }
+        Args: { _name: string; _shop_id: string; _whatsapp: string }
         Returns: string
       }
     }
