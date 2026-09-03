@@ -99,10 +99,22 @@ export function BookingFlow({
   }
 
   async function confirm() {
-    if (!service) return toast.error("Escolha um serviço.");
-    if (!barber) return toast.error("Escolha um barbeiro.");
-    if (!date) return toast.error("Escolha um dia.");
-    if (!time) return toast.error("Escolha um horário.");
+    if (!service) {
+      toast.error("Escolha um serviço.");
+      return;
+    }
+    if (!barber) {
+      toast.error("Escolha um barbeiro.");
+      return;
+    }
+    if (!date) {
+      toast.error("Escolha um dia.");
+      return;
+    }
+    if (!time) {
+      toast.error("Escolha um horário.");
+      return;
+    }
 
     setSending(true);
     const res = await onBook({
