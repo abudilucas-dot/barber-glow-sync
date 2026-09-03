@@ -1,122 +1,126 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Instagram, MapPin, MessageCircle, Scissors, Clock, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, MapPin, Scissors, Sparkles, Store } from "lucide-react";
 
 import heroImage from "@/assets/hero-barbearia.jpg";
-import { BookingFlow } from "@/components/BookingFlow";
 import { Button } from "@/components/ui/button";
-import { SERVICES, SHOP, waLink } from "@/lib/barber-store";
+import { PLATFORM } from "@/lib/barber-store";
+import { useShopDirectory } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Navalha de Ouro — Barbearia | Agende seu horário online" },
+      { title: "BarberLink — Crie a página da sua barbearia com agendamento" },
       {
         name: "description",
         content:
-          "Barbearia Navalha de Ouro: cortes clássicos, barba imperial e combo. Agende online com o seu barbeiro em poucos toques.",
+          "Plataforma para barbearias: crie sua página com link próprio, tabela de preços, equipe e agendamento pelo WhatsApp. Comece grátis.",
       },
-      { property: "og:title", content: "Navalha de Ouro — Barbearia" },
+      { property: "og:title", content: "BarberLink — A plataforma das barbearias" },
       {
         property: "og:description",
         content:
-          "Agende corte, barba ou combo com o barbeiro da sua preferência. Segunda a sábado, 09h às 19h.",
+          "Página pronta, link exclusivo e agenda online para a sua barbearia. Comece grátis e evolua para o plano Pro.",
       },
-      { property: "og:url", content: "https://barber-glow-sync.lovable.app/" },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
-    links: [{ rel: "canonical", href: "https://barber-glow-sync.lovable.app/" }],
   }),
-  component: Index,
+  component: Home,
 });
 
-function Index() {
+function Home() {
+  const { shops, ready } = useShopDirectory();
+
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 pb-20 pt-10 sm:px-6">
+    <main className="mx-auto w-full max-w-4xl px-4 pb-20 pt-10 sm:px-6">
       <header className="text-center">
         <p className="text-[11px] uppercase tracking-[0.4em] text-gold">
-          Est. 2014
+          {PLATFORM.tagline}
         </p>
         <h1 className="mt-3 text-4xl leading-tight sm:text-5xl">
-          <span className="text-gilded">{SHOP.name}</span>
+          <span className="text-gilded">{PLATFORM.name}</span>
         </h1>
-        <p className="mt-2 text-sm text-muted-foreground">{SHOP.tagline}</p>
+        <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
+          {PLATFORM.description}
+        </p>
         <div className="gold-rule mx-auto mt-6 w-40" />
       </header>
 
       <div className="mt-8 overflow-hidden rounded-2xl border border-gold/20">
         <img
           src={heroImage}
-          alt="Interior da barbearia Navalha de Ouro com cadeira clássica e detalhes dourados"
+          alt="Barbearia clássica com cadeira de couro e detalhes dourados"
           width={1600}
           height={1008}
           className="h-56 w-full object-cover sm:h-72"
         />
       </div>
 
-      <nav className="mt-8 grid gap-3">
+      <div className="mt-8 grid gap-3 sm:grid-cols-2">
         <Button asChild size="lg" className="h-14 text-base">
-          <a href="#agendar">
-            <Scissors className="size-5" /> Agendar Horário
-          </a>
-        </Button>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <LinkButton href={SHOP.instagram} icon={<Instagram className="size-4" />}>
-            Instagram
-          </LinkButton>
-          <LinkButton href={SHOP.maps} icon={<MapPin className="size-4" />}>
-            Localização
-          </LinkButton>
-          <LinkButton
-            href={waLink(SHOP.ownerWhatsapp, "Olá! Vim pelo link da barbearia.")}
-            icon={<MessageCircle className="size-4" />}
-          >
-            Falar com o dono
-          </LinkButton>
-        </div>
-        <Button asChild variant="outline" className="h-12 justify-center">
           <Link to="/admin">
-            <ShieldCheck className="size-4" /> Painel de Gestão (equipe)
+            <Sparkles className="size-5" /> Criar minha barbearia grátis
           </Link>
         </Button>
-      </nav>
+        <Button asChild variant="outline" size="lg" className="h-14 text-base">
+          <Link to="/precos">
+            Ver planos <ArrowRight className="size-4" />
+          </Link>
+        </Button>
+      </div>
 
-
-      <section className="panel-lux mt-10 rounded-2xl p-5 sm:p-7">
-        <h2 className="text-xl">Tabela de Preços</h2>
+      <section className="panel-lux mt-12 rounded-2xl p-5 sm:p-7">
+        <h2 className="flex items-center gap-2 text-xl">
+          <Store className="size-5 text-gold" /> Barbearias na plataforma
+        </h2>
         <div className="gold-rule my-4" />
-        <ul className="divide-y divide-border">
-          {SERVICES.map((s) => (
-            <li key={s.name} className="flex items-baseline gap-3 py-3">
-              <span className="text-sm font-medium">{s.name}</span>
-              <span className="mx-1 h-px flex-1 border-b border-dashed border-border" />
-              <span className="text-xs text-muted-foreground">{s.duration}</span>
-              <span className="w-20 text-right font-semibold text-gold">
-                R$ {s.price},00
-              </span>
-            </li>
-          ))}
-        </ul>
+        {!ready ? (
+          <p className="text-sm text-muted-foreground">Carregando barbearias...</p>
+        ) : shops.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nenhuma barbearia publicada ainda. Seja a primeira!
+          </p>
+        ) : (
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {shops.map((s) => (
+              <li key={s.id}>
+                <Link
+                  to="/$slug"
+                  params={{ slug: s.slug }}
+                  className="block rounded-xl border border-border bg-surface-2/40 p-4 transition-colors hover:border-gold/60"
+                >
+                  <span className="block text-sm font-semibold text-gold">{s.name}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {s.tagline || "Barbearia"}
+                  </span>
+                  <span className="mt-2 flex items-center gap-1 text-[11px] uppercase tracking-widest text-muted-foreground">
+                    <MapPin className="size-3" /> /{s.slug}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <section className="panel-lux mt-6 rounded-2xl p-5 sm:p-7">
         <h2 className="flex items-center gap-2 text-xl">
-          <Clock className="size-5 text-gold" /> Horário de Funcionamento
+          <Scissors className="size-5 text-gold" /> Como funciona
         </h2>
         <div className="gold-rule my-4" />
-        <ul className="space-y-2 text-sm">
-          {SHOP.hours.map((h) => (
-            <li key={h.days} className="flex justify-between">
-              <span className="text-muted-foreground">{h.days}</span>
-              <span className="font-medium">{h.time}</span>
+        <ol className="space-y-3 text-sm">
+          {[
+            "O dono cria a conta e monta a barbearia em minutos.",
+            "Edita identidade visual, serviços, preços, equipe e horários.",
+            "Recebe um link exclusivo do tipo /sua-barbearia para divulgar.",
+            "Os clientes agendam e a conversa segue no WhatsApp do barbeiro.",
+          ].map((t) => (
+            <li key={t} className="flex gap-3">
+              <Check className="mt-0.5 size-4 shrink-0 text-gold" />
+              <span className="text-muted-foreground">{t}</span>
             </li>
           ))}
-        </ul>
-      </section>
-
-      <section id="agendar" className="mt-12 scroll-mt-6">
-        <h2 className="mb-5 text-center text-2xl">
-          <span className="text-gilded">Agende seu horário</span>
-        </h2>
-        <BookingFlow />
+        </ol>
       </section>
 
       <footer className="mt-12 text-center text-xs text-muted-foreground">
@@ -124,30 +128,12 @@ function Index() {
           to="/admin"
           className="inline-flex items-center gap-2 uppercase tracking-[0.25em] hover:text-gold"
         >
-          <ShieldCheck className="size-3.5" /> Painel de Gestão
+          Área do dono
         </Link>
         <p className="mt-4">
-          © {new Date().getFullYear()} {SHOP.name}. Todos os direitos reservados.
+          © {new Date().getFullYear()} {PLATFORM.name}. Todos os direitos reservados.
         </p>
       </footer>
     </main>
-  );
-}
-
-function LinkButton({
-  href,
-  icon,
-  children,
-}: {
-  href: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <Button asChild variant="outline" className="h-12 justify-center">
-      <a href={href} target="_blank" rel="noopener noreferrer">
-        {icon} {children}
-      </a>
-    </Button>
   );
 }
