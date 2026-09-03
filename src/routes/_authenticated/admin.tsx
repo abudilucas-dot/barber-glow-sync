@@ -61,7 +61,8 @@ function AdminPage() {
   }, [shops, selected]);
 
   const admin = useShopAdmin(selected);
-  const isFree = (admin.shop?.plan ?? "free") === "free";
+  const isPro = admin.shop?.plan === "pro";
+  const daysLeft = admin.shop ? trialDaysLeft(admin.shop) : 0;
 
   if (!shopsReady) {
     return <Shell><p className="text-sm text-muted-foreground">Carregando...</p></Shell>;
