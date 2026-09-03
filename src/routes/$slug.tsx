@@ -12,7 +12,7 @@ import heroImage from "@/assets/hero-barbearia.jpg";
 import { BookingFlow } from "@/components/BookingFlow";
 import { Button } from "@/components/ui/button";
 import { PLATFORM, waLink } from "@/lib/barber-store";
-import { usePublicShop } from "@/lib/shop-store";
+import { isShopLive, usePublicShop } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/$slug")({
   head: ({ params }) => {
@@ -53,12 +53,16 @@ function ShopPage() {
     );
   }
 
-  if (!shop) {
+  if (!shop || !isShopLive(shop)) {
     return (
       <main className="mx-auto max-w-3xl px-4 py-20 text-center">
-        <h1 className="text-2xl text-gilded">Barbearia não encontrada</h1>
+        <h1 className="text-2xl text-gilded">
+          {shop ? "Página temporariamente fora do ar" : "Barbearia não encontrada"}
+        </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          O link /{slug} não existe ou ainda não foi publicado.
+          {shop
+            ? "O período de teste desta barbearia terminou. O dono precisa assinar o plano Pro para reativar o link."
+            : `O link /${slug} não existe ou ainda não foi publicado.`}
         </p>
         <Button asChild variant="outline" className="mt-6">
           <Link to="/">

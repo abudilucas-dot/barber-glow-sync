@@ -28,7 +28,7 @@ import {
   onlyDigits,
   slugify,
 } from "@/lib/barber-store";
-import { useMyShops, useShopAdmin } from "@/lib/shop-store";
+import { trialDaysLeft, useMyShops, useShopAdmin } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -61,7 +61,8 @@ function AdminPage() {
   }, [shops, selected]);
 
   const admin = useShopAdmin(selected);
-  const isFree = (admin.shop?.plan ?? "free") === "free";
+  const isPro = admin.shop?.plan === "pro";
+  const daysLeft = admin.shop ? trialDaysLeft(admin.shop) : 0;
 
   if (!shopsReady) {
     return <Shell><p className="text-sm text-muted-foreground">Carregando...</p></Shell>;
@@ -102,11 +103,9 @@ function AdminPage() {
             {s.name}
           </button>
         ))}
-        {shops.length < FREE_LIMITS.shops + 4 && (
-          <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
-            <Plus className="size-4" /> Nova
-          </Button>
-        )}
+        <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
+          <Plus className="size-4" /> Nova
+        </Button>
       </div>
 
       {!selected ? (
@@ -125,16 +124,20 @@ function AdminPage() {
         <p className="text-sm text-muted-foreground">Carregando barbearia...</p>
       ) : (
         <>
-          <div className="panel-lux mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4">
+          <div className="panel-lux mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl p-5">
             <div>
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                 Link público
               </p>
               <p className="text-sm font-semibold text-gold">/{admin.shop.slug}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full border border-border px-3 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">
-                Plano {isFree ? "Grátis" : "Pro"}
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-widest ${
+                  isPro ? "border-gold/60 text-gold" : "border-border text-muted-foreground"
+                }`}
+              >
+                {isPro ? "Plano Pro" : `Teste — ${daysLeft} dia(s)`}
               </span>
               <Button asChild variant="outline" size="sm">
                 <Link to="/$slug" params={{ slug: admin.shop.slug }}>
@@ -144,41 +147,60 @@ function AdminPage() {
             </div>
           </div>
 
-          {isFree && (
-            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-accent/30 p-4 text-sm">
+          {!isPro && (
+            <div
+              className={`mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-sm ${
+                daysLeft > 0
+                  ? "border-gold/40 bg-accent/30"
+                  : "border-destructive/50 bg-destructive/10"
+              }`}
+            >
               <span className="text-muted-foreground">
-                Plano grátis: até {FREE_LIMITS.services} serviços e {FREE_LIMITS.barbers}{" "}
-                barbeiro.
+                {daysLeft > 0
+                  ? `Seu teste grátis termina em ${daysLeft} dia(s). Assine o Pro para manter a página no ar.`
+                  : "Seu teste grátis terminou e a página está fora do ar. Assine o Pro para reativar."}
               </span>
               <Button asChild size="sm">
                 <Link to="/precos">
-                  <Crown className="size-4" /> Ver plano Pro
+                  <Crown className="size-4" /> Assinar o Pro
                 </Link>
               </Button>
             </div>
           )}
 
           <Tabs defaultValue="loja">
-            <TabsList className="flex w-full flex-wrap">
-              <TabsTrigger value="loja"><Store className="size-4" /> Barbearia</TabsTrigger>
-              <TabsTrigger value="servicos"><Scissors className="size-4" /> Serviços</TabsTrigger>
-              <TabsTrigger value="horarios"><Clock className="size-4" /> Horários</TabsTrigger>
-              <TabsTrigger value="equipe"><Users className="size-4" /> Equipe</TabsTrigger>
-              <TabsTrigger value="clientes"><Users className="size-4" /> Clientes</TabsTrigger>
-              <TabsTrigger value="agenda"><CalendarClock className="size-4" /> Agenda</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 gap-1 rounded-2xl p-1 sm:grid-cols-3 lg:grid-cols-6">
+              {(
+                [
+                  ["loja", "Barbearia", Store],
+                  ["servicos", "Serviços", Scissors],
+                  ["horarios", "Horários", Clock],
+                  ["equipe", "Equipe", Users],
+                  ["clientes", "Clientes", Users],
+                  ["agenda", "Agenda", CalendarClock],
+                ] as const
+              ).map(([value, label, Icon]) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className="flex items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-xs"
+                >
+                  <Icon className="size-4" /> {label}
+                </TabsTrigger>
+              ))}
             </TabsList>
 
             <TabsContent value="loja">
               <ShopIdentity admin={admin} onSaved={refreshShops} />
             </TabsContent>
             <TabsContent value="servicos">
-              <ServicesTab admin={admin} isFree={isFree} />
+              <ServicesTab admin={admin} isFree={false} />
             </TabsContent>
             <TabsContent value="horarios">
               <HoursTab admin={admin} />
             </TabsContent>
             <TabsContent value="equipe">
-              <BarbersTab admin={admin} isFree={isFree} />
+              <BarbersTab admin={admin} isFree={false} />
             </TabsContent>
             <TabsContent value="clientes">
               <ClientsTab admin={admin} />
