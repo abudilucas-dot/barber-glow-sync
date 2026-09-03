@@ -28,7 +28,7 @@ import {
   onlyDigits,
   slugify,
 } from "@/lib/barber-store";
-import { useMyShops, useShopAdmin } from "@/lib/shop-store";
+import { trialDaysLeft, useMyShops, useShopAdmin } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
