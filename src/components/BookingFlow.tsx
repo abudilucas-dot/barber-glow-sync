@@ -13,27 +13,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  SERVICES,
-  SHOP,
   TIME_SLOTS,
   formatBR,
   maskPhone,
   nextDays,
   onlyDigits,
-  useBarbershop,
   waLink,
-  type Barber,
 } from "@/lib/barber-store";
+import type { Barber, Shop, ShopService } from "@/lib/shop-store";
 import { cn } from "@/lib/utils";
 
 const STEPS = ["Identificação", "Agendamento", "Confirmação"] as const;
-const SAVED_KEY = "navalha:cliente";
 
 type SavedClient = { name: string; phone: string };
 
-function readSaved(): SavedClient | null {
+function savedKey(slug: string) {
+  return `barberlink:cliente:${slug}`;
+}
+
+function readSaved(slug: string): SavedClient | null {
   try {
-    const raw = localStorage.getItem(SAVED_KEY);
+    const raw = localStorage.getItem(savedKey(slug));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SavedClient;
     if (!parsed?.name || !parsed?.phone) return null;
@@ -43,14 +43,28 @@ function readSaved(): SavedClient | null {
   }
 }
 
-export function BookingFlow() {
-  const {
-    barbers,
-    addClient,
-    addAppointment,
-    isSlotTaken,
-  } = useBarbershop();
+export type BookingResult = { ok: boolean; error?: string };
 
+export function BookingFlow({
+  shop,
+  services,
+  barbers,
+  isSlotTaken,
+  onBook,
+}: {
+  shop: Shop;
+  services: ShopService[];
+  barbers: Barber[];
+  isSlotTaken: (barberId: string, date: string, time: string) => boolean;
+  onBook: (input: {
+    name: string;
+    whatsapp: string;
+    barberId: string;
+    service: string;
+    date: string;
+    time: string;
+  }) => Promise<BookingResult>;
+}) {
   const days = useMemo(() => nextDays(7), []);
   const [step, setStep] = useState(0);
   const [name, setName] = useState("");
@@ -60,15 +74,16 @@ export function BookingFlow() {
   const [barber, setBarber] = useState<Barber | null>(null);
   const [date, setDate] = useState(days[0]?.iso ?? "");
   const [time, setTime] = useState("");
+  const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    const s = readSaved();
+    const s = readSaved(shop.slug);
     if (s) {
       setSaved(s);
       setName(s.name);
       setPhone(s.phone);
     }
-  }, []);
+  }, [shop.slug]);
 
   function submitIdentity(e: React.FormEvent) {
     e.preventDefault();
@@ -84,51 +99,37 @@ export function BookingFlow() {
   }
 
   async function confirm() {
-    if (!service) {
-      toast.error("Escolha um serviço.");
-      return;
-    }
-    if (!barber) {
-      toast.error("Escolha um barbeiro.");
-      return;
-    }
-    if (!date) {
-      toast.error("Escolha um dia.");
-      return;
-    }
-    if (!time) {
-      toast.error("Escolha um horário.");
-      return;
-    }
+    if (!service) return toast.error("Escolha um serviço.");
+    if (!barber) return toast.error("Escolha um barbeiro.");
+    if (!date) return toast.error("Escolha um dia.");
+    if (!time) return toast.error("Escolha um horário.");
 
-    const client = await addClient(name.trim(), phone);
-    if (!client) {
-      toast.error("Não foi possível salvar seu cadastro. Tente novamente.");
-      return;
-    }
-    const ok = await addAppointment({
-      clientId: client.id,
+    setSending(true);
+    const res = await onBook({
+      name: name.trim(),
+      whatsapp: phone,
       barberId: barber.id,
       service,
       date,
       time,
     });
-    if (!ok) {
-      toast.error("Esse horário acabou de ser ocupado. Escolha outro.");
+    setSending(false);
+    if (!res.ok) {
+      toast.error(res.error ?? "Não foi possível concluir o agendamento.");
       return;
     }
 
     try {
       localStorage.setItem(
-        SAVED_KEY,
-        JSON.stringify({ name: client.name, phone } satisfies SavedClient),
+        savedKey(shop.slug),
+        JSON.stringify({ name: name.trim(), phone } satisfies SavedClient),
       );
-      setSaved({ name: client.name, phone });
+      setSaved({ name: name.trim(), phone });
     } catch {
       /* armazenamento indisponível */
     }
 
-    const message = `Olá ${barber.name}! Sou o(a) ${client.name}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time}.`;
+    const message = `Olá ${barber.name}! Sou o(a) ${name.trim()}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time} na ${shop.name}.`;
     window.open(waLink(barber.whatsapp, message), "_blank", "noopener");
     setStep(2);
     toast.success("Agendamento confirmado!");
@@ -144,7 +145,7 @@ export function BookingFlow() {
 
   function signOutClient() {
     try {
-      localStorage.removeItem(SAVED_KEY);
+      localStorage.removeItem(savedKey(shop.slug));
     } catch {
       /* ignore */
     }
@@ -243,31 +244,37 @@ export function BookingFlow() {
         <div className="space-y-8">
           <section className="space-y-3">
             <SectionTitle icon={<Scissors className="size-4" />} title="Serviço" />
-            <div className="grid gap-2 sm:grid-cols-2">
-              {SERVICES.map((s) => (
-                <button
-                  key={s.name}
-                  type="button"
-                  onClick={() => setService(s.name)}
-                  className={cn(
-                    "flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors",
-                    service === s.name
-                      ? "border-gold bg-accent text-gold"
-                      : "border-border bg-surface-2/40 hover:border-gold/50",
-                  )}
-                >
-                  <span>{s.name}</span>
-                  <span className="font-semibold">R$ {s.price}</span>
-                </button>
-              ))}
-            </div>
+            {services.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Esta barbearia ainda não cadastrou serviços.
+              </p>
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2">
+                {services.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => setService(s.name)}
+                    className={cn(
+                      "flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors",
+                      service === s.name
+                        ? "border-gold bg-accent text-gold"
+                        : "border-border bg-surface-2/40 hover:border-gold/50",
+                    )}
+                  >
+                    <span>{s.name}</span>
+                    <span className="font-semibold">R$ {s.price}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="space-y-3">
             <SectionTitle icon={<User className="size-4" />} title="Barbeiro" />
             {barbers.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhum barbeiro cadastrado. Cadastre a equipe no painel de gestão.
+                Nenhum barbeiro cadastrado nesta barbearia.
               </p>
             ) : (
               <div className="grid gap-2 sm:grid-cols-2">
@@ -304,10 +311,7 @@ export function BookingFlow() {
           </section>
 
           <section className="space-y-3">
-            <SectionTitle
-              icon={<CalendarDays className="size-4" />}
-              title="Dia"
-            />
+            <SectionTitle icon={<CalendarDays className="size-4" />} title="Dia" />
             <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
               {days.map((d, i) => (
                 <button
@@ -377,8 +381,8 @@ export function BookingFlow() {
             <Button variant="outline" onClick={() => setStep(0)} className="sm:w-40">
               <ChevronLeft className="size-4" /> Voltar
             </Button>
-            <Button size="lg" onClick={confirm} className="flex-1">
-              Confirmar e enviar no WhatsApp
+            <Button size="lg" onClick={confirm} disabled={sending} className="flex-1">
+              {sending ? "Enviando..." : "Confirmar e enviar no WhatsApp"}
             </Button>
           </div>
         </div>
@@ -402,14 +406,14 @@ export function BookingFlow() {
             <Row label="Barbeiro" value={barber?.name ?? "-"} />
             <Row label="Data" value={formatBR(date)} />
             <Row label="Horário" value={time} />
-            <Row label="Local" value={SHOP.name} />
+            <Row label="Local" value={shop.name} />
           </div>
           {barber && (
             <Button asChild size="lg" className="w-full sm:w-auto">
               <a
                 href={waLink(
                   barber.whatsapp,
-                  `Olá ${barber.name}! Sou o(a) ${name}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time}.`,
+                  `Olá ${barber.name}! Sou o(a) ${name}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time} na ${shop.name}.`,
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -431,13 +435,7 @@ export function BookingFlow() {
   );
 }
 
-function SectionTitle({
-  icon,
-  title,
-}: {
-  icon: React.ReactNode;
-  title: string;
-}) {
+function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2 text-gold">
       {icon}
