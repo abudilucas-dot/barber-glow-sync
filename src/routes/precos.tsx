@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, Crown, Sparkles } from "lucide-react";
 
+import heroImage from "@/assets/hero-barbearia.jpg";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { Button } from "@/components/ui/button";
 import { PLATFORM } from "@/lib/barber-store";
@@ -25,6 +26,8 @@ export const Route = createFileRoute("/precos")({
           "Página da barbearia com agendamento online: teste 30 dias e continue por R$ 49,90/mês ou R$ 450/ano.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:image", content: absoluteUrl(heroImage) },
+      { property: "og:image:alt", content: "Barbearia clássica com detalhes dourados" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [{ rel: "canonical", href: absoluteUrl("/precos") }],

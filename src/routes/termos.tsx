@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
+import heroImage from "@/assets/hero-barbearia.jpg";
 import { PLATFORM } from "@/lib/barber-store";
 import { absoluteUrl } from "@/lib/site-url";
 
@@ -8,6 +9,8 @@ export const Route = createFileRoute("/termos")({
     meta: [
       { title: `Termos de Uso — ${PLATFORM.name}` },
       { name: "description", content: "Termos de uso da plataforma BarberLink." },
+      { property: "og:image", content: absoluteUrl(heroImage) },
+      { property: "og:image:alt", content: "Barbearia clássica com detalhes dourados" },
     ],
     links: [{ rel: "canonical", href: absoluteUrl("/termos") }],
   }),
