@@ -1,4 +1,8 @@
--- 1. Colunas faltantes
+-- Compatibilidade do editor Lovable, preservando as proteções de agenda já existentes.
+-- Esta migration ainda não havia sido aplicada; não altera o histórico remoto do banco.
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
 ALTER TABLE public.barbershops
   ADD COLUMN IF NOT EXISTS city text,
   ADD COLUMN IF NOT EXISTS neighborhood text,
@@ -21,96 +25,29 @@ ALTER TABLE public.appointments
 DO $$ BEGIN
   ALTER TABLE public.appointments
     ADD CONSTRAINT appointments_status_check
-    CHECK (status IN ('pending','confirmed','completed','cancelled','no_show'));
+    CHECK (status IN ('pending', 'confirmed', 'completed', 'cancelled', 'no_show'));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 ALTER TABLE public.subscriptions
-  ADD COLUMN IF NOT EXISTS shop_id uuid REFERENCES public.barbershops(id) ON DELETE SET NULL;
+  ADD COLUMN IF NOT EXISTS shop_id uuid REFERENCES public.barbershops(id) ON DELETE CASCADE;
 
 DO $$ BEGIN
   ALTER TABLE public.subscriptions
     ADD CONSTRAINT subscriptions_stripe_subscription_id_key UNIQUE (stripe_subscription_id);
 EXCEPTION WHEN duplicate_table THEN NULL; WHEN duplicate_object THEN NULL; END $$;
 
--- 2. Eventos de webhook (idempotência)
 CREATE TABLE IF NOT EXISTS public.subscription_events (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  stripe_event_id text NOT NULL UNIQUE,
+  stripe_event_id text PRIMARY KEY,
+  environment text NOT NULL CHECK (environment IN ('sandbox', 'live')),
   event_type text NOT NULL,
-  environment text NOT NULL DEFAULT 'sandbox',
-  created_at timestamptz NOT NULL DEFAULT now()
+  received_at timestamptz NOT NULL DEFAULT now()
 );
-GRANT ALL ON public.subscription_events TO service_role;
 ALTER TABLE public.subscription_events ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.subscription_events FROM anon, authenticated;
+GRANT ALL ON public.subscription_events TO service_role;
 
--- 3. get_booked_slots com período padrão
-CREATE OR REPLACE FUNCTION public.get_booked_slots(
-  _shop_id uuid,
-  _from date DEFAULT CURRENT_DATE,
-  _to date DEFAULT (CURRENT_DATE + 60)
-)
-RETURNS TABLE(barber_id uuid, date date, "time" text)
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT a.barber_id, a.date, a.time
-  FROM public.appointments a
-  WHERE a.shop_id = _shop_id
-    AND a.date BETWEEN _from AND _to
-    AND a.status <> 'cancelled';
-$$;
-
--- 4. Horários livres
-CREATE OR REPLACE FUNCTION public.get_available_slots(
-  _shop_id uuid,
-  _service_id uuid,
-  _date date,
-  _barber_id uuid DEFAULT NULL
-)
-RETURNS TABLE(barber_id uuid, start_time text, end_time text)
-LANGUAGE plpgsql
-STABLE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  mins integer;
-BEGIN
-  SELECT COALESCE(s.duration_minutes, 30) INTO mins
-  FROM public.shop_services s
-  WHERE s.id = _service_id AND s.shop_id = _shop_id;
-  IF mins IS NULL THEN mins := 30; END IF;
-
-  RETURN QUERY
-  SELECT b.id,
-         to_char(g.slot, 'HH24:MI'),
-         to_char(g.slot + make_interval(mins => mins), 'HH24:MI')
-  FROM public.barbers b
-  CROSS JOIN LATERAL (
-    SELECT generate_series(
-      _date::timestamp + interval '9 hours',
-      _date::timestamp + interval '18 hours',
-      interval '30 minutes'
-    ) AS slot
-  ) g
-  WHERE b.shop_id = _shop_id
-    AND b.active
-    AND (_barber_id IS NULL OR b.id = _barber_id)
-    AND (_date > CURRENT_DATE OR g.slot > now())
-    AND NOT EXISTS (
-      SELECT 1 FROM public.appointments a
-      WHERE a.barber_id = b.id
-        AND a.date = _date
-        AND a.status <> 'cancelled'
-        AND a.time = to_char(g.slot, 'HH24:MI')
-    )
-  ORDER BY b.id, g.slot;
-END;
-$$;
-
--- 5. Criar reserva
+-- Mantém a assinatura de texto usada pelo navegador, mas delega para a RPC
+-- segura (assinatura time) que valida serviço/barbeiro, rate limit e concorrência.
 CREATE OR REPLACE FUNCTION public.create_booking(
   _shop_id uuid,
   _service_id uuid,
@@ -120,81 +57,74 @@ CREATE OR REPLACE FUNCTION public.create_booking(
   _client_name text,
   _client_phone text
 )
-RETURNS TABLE(id uuid, barber_id uuid, client_id uuid, service text, date date, "time" text, status text)
+RETURNS TABLE(
+  id uuid,
+  barber_id uuid,
+  client_id uuid,
+  service text,
+  date date,
+  "time" text,
+  status text
+)
 LANGUAGE plpgsql
-VOLATILE
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  v_start_time time;
+BEGIN
+  IF COALESCE(_start_time, '') !~ '^\\d{2}:\\d{2}(:\\d{2})?$' THEN
+    RAISE EXCEPTION 'Horário inválido';
+  END IF;
+  v_start_time := _start_time::time;
+
+  RETURN QUERY
+  SELECT a.id, a.barber_id, a.client_id, a.service, a.date, a.time, a.status::text
+  FROM public.create_booking(
+    _shop_id,
+    _service_id,
+    _barber_id,
+    _date,
+    v_start_time,
+    _client_name,
+    _client_phone
+  ) secured
+  JOIN public.appointments a ON a.id = secured.appointment_id;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.create_booking(uuid, uuid, uuid, date, text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.create_booking(uuid, uuid, uuid, date, text, text, text) TO anon, authenticated;
+
+-- O painel espera um boolean, mas a operação mantém o histórico e valida dono/staff.
+DROP FUNCTION IF EXISTS public.cancel_appointment(uuid);
+CREATE FUNCTION public.cancel_appointment(_appointment_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_client uuid;
-  v_barber uuid;
-  v_service text;
-  v_id uuid;
+  v_appointment public.appointments;
 BEGIN
-  SELECT s.name INTO v_service
-  FROM public.shop_services s
-  WHERE s.id = _service_id AND s.shop_id = _shop_id;
-  IF v_service IS NULL THEN
-    RAISE EXCEPTION 'Serviço não encontrado.';
+  SELECT * INTO v_appointment
+  FROM public.appointments
+  WHERE id = _appointment_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Agendamento não encontrado';
   END IF;
-
-  v_barber := _barber_id;
-  IF v_barber IS NULL THEN
-    SELECT b.id INTO v_barber
-    FROM public.barbers b
-    WHERE b.shop_id = _shop_id AND b.active
-      AND NOT EXISTS (
-        SELECT 1 FROM public.appointments a
-        WHERE a.barber_id = b.id AND a.date = _date
-          AND a.time = _start_time AND a.status <> 'cancelled')
-    ORDER BY random() LIMIT 1;
-  END IF;
-  IF v_barber IS NULL THEN
-    RAISE EXCEPTION 'Nenhum barbeiro disponível nesse horário.';
-  END IF;
-
-  IF EXISTS (
-    SELECT 1 FROM public.appointments a
-    WHERE a.barber_id = v_barber AND a.date = _date
-      AND a.time = _start_time AND a.status <> 'cancelled'
+  IF auth.uid() IS NULL OR NOT (
+    public.is_shop_owner(v_appointment.shop_id, auth.uid()) OR public.is_staff(auth.uid())
   ) THEN
-    RAISE EXCEPTION 'Horário já reservado.';
-  END IF;
-
-  v_client := public.upsert_client(_shop_id, _client_name, _client_phone);
-
-  INSERT INTO public.appointments (shop_id, client_id, barber_id, service, date, time, status)
-  VALUES (_shop_id, v_client, v_barber, v_service, _date, _start_time, 'pending')
-  RETURNING appointments.id INTO v_id;
-
-  RETURN QUERY
-  SELECT a.id, a.barber_id, a.client_id, a.service, a.date, a.time, a.status
-  FROM public.appointments a WHERE a.id = v_id;
-END;
-$$;
-
--- 6. Cancelar reserva
-CREATE OR REPLACE FUNCTION public.cancel_appointment(_appointment_id uuid)
-RETURNS boolean
-LANGUAGE plpgsql
-VOLATILE
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE v_shop uuid;
-BEGIN
-  SELECT shop_id INTO v_shop FROM public.appointments WHERE id = _appointment_id;
-  IF v_shop IS NULL THEN RETURN false; END IF;
-  IF NOT (public.is_shop_owner(v_shop, auth.uid()) OR public.is_staff(auth.uid())) THEN
-    RAISE EXCEPTION 'Sem permissão.';
+    RAISE EXCEPTION 'Sem permissão';
   END IF;
   UPDATE public.appointments SET status = 'cancelled' WHERE id = _appointment_id;
   RETURN true;
 END;
 $$;
+REVOKE ALL ON FUNCTION public.cancel_appointment(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cancel_appointment(uuid) TO authenticated;
 
--- 7. Atualizar dados da barbearia
 CREATE OR REPLACE FUNCTION public.update_shop_profile(
   _shop_id uuid,
   _name text,
@@ -208,82 +138,103 @@ CREATE OR REPLACE FUNCTION public.update_shop_profile(
 )
 RETURNS boolean
 LANGUAGE plpgsql
-VOLATILE
 SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF NOT (public.is_shop_owner(_shop_id, auth.uid()) OR public.is_staff(auth.uid())) THEN
-    RAISE EXCEPTION 'Sem permissão.';
+  IF auth.uid() IS NULL OR NOT (
+    public.is_shop_owner(_shop_id, auth.uid()) OR public.is_staff(auth.uid())
+  ) THEN
+    RAISE EXCEPTION 'Sem permissão';
+  END IF;
+  IF length(btrim(COALESCE(_name, ''))) < 3 OR _slug !~ '^[a-z0-9]+(?:-[a-z0-9]+)*$' THEN
+    RAISE EXCEPTION 'Dados da barbearia inválidos';
   END IF;
   UPDATE public.barbershops SET
-    name = _name,
+    name = btrim(_name),
     slug = _slug,
-    tagline = _tagline,
-    about = _about,
+    tagline = COALESCE(_tagline, ''),
+    about = COALESCE(_about, ''),
     hero_url = NULLIF(_hero_url, ''),
     instagram_url = NULLIF(_instagram_url, ''),
     maps_url = NULLIF(_maps_url, ''),
-    owner_whatsapp = _owner_whatsapp,
+    owner_whatsapp = COALESCE(_owner_whatsapp, ''),
     updated_at = now()
   WHERE id = _shop_id;
-  RETURN true;
+  RETURN FOUND;
 END;
 $$;
+REVOKE ALL ON FUNCTION public.update_shop_profile(uuid, text, text, text, text, text, text, text, text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.update_shop_profile(uuid, text, text, text, text, text, text, text, text) TO authenticated;
 
--- 8. Dados padrão de uma barbearia nova
-CREATE OR REPLACE FUNCTION public.initialize_shop_schedule(_shop_id uuid)
+-- Garante horários visíveis no painel e na página pública de novas barbearias.
+DROP FUNCTION IF EXISTS public.initialize_barber_schedule(uuid);
+DROP FUNCTION IF EXISTS public.initialize_shop_schedule(uuid);
+
+CREATE FUNCTION public.initialize_shop_schedule(_shop_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql
-VOLATILE
 SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF NOT (public.is_shop_owner(_shop_id, auth.uid()) OR public.is_staff(auth.uid())) THEN
-    RAISE EXCEPTION 'Sem permissão.';
+  IF auth.uid() IS NULL OR NOT (
+    public.is_shop_owner(_shop_id, auth.uid()) OR public.is_staff(auth.uid())
+  ) THEN
+    RAISE EXCEPTION 'Sem permissão';
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM public.shop_hours WHERE shop_id = _shop_id) THEN
-    INSERT INTO public.shop_hours (shop_id, days, hours, sort_order) VALUES
+    INSERT INTO public.shop_hours (shop_id, days, hours, sort_order)
+    VALUES
       (_shop_id, 'Segunda a Sexta', '09:00 às 19:00', 1),
       (_shop_id, 'Sábado', '09:00 às 18:00', 2),
       (_shop_id, 'Domingo', 'Fechado', 3);
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM public.shop_services WHERE shop_id = _shop_id) THEN
-    INSERT INTO public.shop_services (shop_id, name, price, duration, duration_minutes, sort_order) VALUES
-      (_shop_id, 'Corte Masculino', 45, '30 min', 30, 1),
-      (_shop_id, 'Barba', 35, '30 min', 30, 2),
-      (_shop_id, 'Combo Corte + Barba', 70, '1h', 60, 3);
-  END IF;
-
+  INSERT INTO public.shop_business_hours (shop_id, weekday, is_open, opens_at, closes_at)
+  SELECT
+    _shop_id,
+    d.weekday,
+    d.weekday <> 0,
+    CASE WHEN d.weekday = 0 THEN NULL ELSE '09:00'::time END,
+    CASE
+      WHEN d.weekday BETWEEN 1 AND 5 THEN '19:00'::time
+      WHEN d.weekday = 6 THEN '18:00'::time
+      ELSE NULL
+    END
+  FROM generate_series(0, 6) AS d(weekday)
+  ON CONFLICT (shop_id, weekday) DO NOTHING;
   RETURN true;
 END;
 $$;
 
-CREATE OR REPLACE FUNCTION public.initialize_barber_schedule(_barber_id uuid)
+CREATE FUNCTION public.initialize_barber_schedule(_barber_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql
-VOLATILE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE v_shop uuid;
+DECLARE
+  v_shop_id uuid;
 BEGIN
-  SELECT shop_id INTO v_shop FROM public.barbers WHERE id = _barber_id;
-  IF v_shop IS NULL THEN RETURN false; END IF;
-  IF NOT (public.is_shop_owner(v_shop, auth.uid()) OR public.is_staff(auth.uid())) THEN
-    RAISE EXCEPTION 'Sem permissão.';
+  SELECT shop_id INTO v_shop_id FROM public.barbers WHERE id = _barber_id;
+  IF v_shop_id IS NULL OR auth.uid() IS NULL OR NOT (
+    public.is_shop_owner(v_shop_id, auth.uid()) OR public.is_staff(auth.uid())
+  ) THEN
+    RAISE EXCEPTION 'Sem permissão';
   END IF;
+
+  PERFORM public.initialize_shop_schedule(v_shop_id);
+  INSERT INTO public.barber_working_hours (barber_id, weekday, is_working, starts_at, ends_at)
+  SELECT _barber_id, weekday, is_open, opens_at, closes_at
+  FROM public.shop_business_hours
+  WHERE shop_id = v_shop_id
+  ON CONFLICT (barber_id, weekday) DO NOTHING;
   UPDATE public.barbers SET active = true WHERE id = _barber_id;
   RETURN true;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_available_slots(uuid, uuid, date, uuid) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.create_booking(uuid, uuid, uuid, date, text, text, text) TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.cancel_appointment(uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.update_shop_profile(uuid, text, text, text, text, text, text, text, text) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.initialize_shop_schedule(uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.initialize_barber_schedule(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.initialize_shop_schedule(uuid), public.initialize_barber_schedule(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.initialize_shop_schedule(uuid), public.initialize_barber_schedule(uuid) TO authenticated;

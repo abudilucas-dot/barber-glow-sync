@@ -222,7 +222,7 @@ export function usePublicShop(slug: string) {
         _shop_id: shop.id,
         _service_id: serviceId,
         _date: date,
-        _barber_id: barberId ?? undefined,
+        _barber_id: barberId ?? null,
       });
       if (error) return [];
       return (data ?? []).map((slot) => ({
@@ -247,7 +247,7 @@ export function usePublicShop(slug: string) {
       const { data, error } = await supabase.rpc("create_booking", {
         _shop_id: shop.id,
         _service_id: input.serviceId,
-        _barber_id: input.barberId as unknown as string,
+        _barber_id: input.barberId,
         _date: input.date,
         _start_time: input.startTime,
         _client_name: input.name,
