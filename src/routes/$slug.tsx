@@ -1,10 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowLeft, Clock, Instagram, MapPin, MessageCircle, Scissors } from "lucide-react";
 
 import heroImage from "@/assets/hero-barbearia.jpg";
 import { BookingFlow } from "@/components/BookingFlow";
 import { Button } from "@/components/ui/button";
 import { formatDuration, PLATFORM, waLink } from "@/lib/barber-store";
+import { absoluteUrl } from "@/lib/site-url";
 import { isShopLive, usePublicShop } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/$slug")({
@@ -18,17 +19,27 @@ export const Route = createFileRoute("/$slug")({
       .select("name, tagline, about, hero_url")
       .eq("slug", params.slug)
       .maybeSingle();
+    if (!data && typeof window === "undefined") {
+      throw notFound();
+    }
     return data;
   },
   head: ({ params, loaderData }) => {
+    if (!loaderData) {
+      return {
+        meta: [
+          { title: `Página não encontrada — ${PLATFORM.name}` },
+          { name: "robots", content: "noindex, nofollow" },
+        ],
+      };
+    }
     const pretty =
-      loaderData?.name ??
+      loaderData.name ??
       params.slug
         .split("-")
         .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
         .join(" ");
-    const siteUrl = import.meta.env["VITE_PUBLIC_SITE_URL"]?.replace(/\/$/, "");
-    const canonical = siteUrl ? `${siteUrl}/${params.slug}` : undefined;
+    const canonical = absoluteUrl(`/${params.slug}`);
     return {
       meta: [
         { title: `${pretty} — Agende seu horário online` },
@@ -43,10 +54,14 @@ export const Route = createFileRoute("/$slug")({
         },
         { property: "og:type", content: "website" },
         { name: "twitter:card", content: "summary_large_image" },
-        ...(canonical ? [{ property: "og:url", content: canonical }] : []),
-        ...(loaderData?.hero_url ? [{ property: "og:image", content: loaderData.hero_url }] : []),
+        { property: "og:url", content: canonical },
+        { property: "og:image", content: loaderData.hero_url || absoluteUrl(heroImage) },
+        {
+          property: "og:image:alt",
+          content: `Página da barbearia ${pretty} no BarberLink`,
+        },
       ],
-      links: canonical ? [{ rel: "canonical", href: canonical }] : [],
+      links: [{ rel: "canonical", href: canonical }],
     };
   },
   component: ShopPage,

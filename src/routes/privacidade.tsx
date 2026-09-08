@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { PLATFORM } from "@/lib/barber-store";
+import { absoluteUrl } from "@/lib/site-url";
 
 export const Route = createFileRoute("/privacidade")({
   head: () => ({
@@ -8,6 +9,7 @@ export const Route = createFileRoute("/privacidade")({
       { title: `Política de Privacidade — ${PLATFORM.name}` },
       { name: "description", content: "Como o BarberLink trata dados pessoais." },
     ],
+    links: [{ rel: "canonical", href: absoluteUrl("/privacidade") }],
   }),
   component: PrivacyPage,
 });

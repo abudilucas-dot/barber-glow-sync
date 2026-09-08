@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Crown, Sparkles } from "lucide-react";
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { Button } from "@/components/ui/button";
 import { PLATFORM } from "@/lib/barber-store";
+import { absoluteUrl } from "@/lib/site-url";
 import { useMyShops } from "@/lib/shop-store";
 import { PLANS } from "@/lib/stripe";
 
@@ -26,6 +27,7 @@ export const Route = createFileRoute("/precos")({
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: absoluteUrl("/precos") }],
   }),
   component: PricingPage,
 });

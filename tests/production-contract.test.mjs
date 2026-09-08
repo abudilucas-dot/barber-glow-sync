@@ -42,3 +42,14 @@ test("fluxos públicos de senha e documentos legais existem", async () => {
     assert.ok(contents.length > 100, `${path} deve ter conteúdo`);
   }
 });
+
+test("SEO não usa a marca antiga e protege rotas privadas", async () => {
+  const auth = await read("src/routes/auth.tsx");
+  const publicShop = await read("src/routes/$slug.tsx");
+  const robots = await read("src/routes/robots[.]txt.ts");
+
+  assert.doesNotMatch(auth, /Navalha de Ouro/);
+  assert.match(auth, /noindex, nofollow/);
+  assert.match(publicShop, /throw notFound\(\)/);
+  assert.match(robots, /Sitemap:/);
+});

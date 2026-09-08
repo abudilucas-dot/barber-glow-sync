@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { PLATFORM } from "@/lib/barber-store";
+import { absoluteUrl } from "@/lib/site-url";
 
 /** Aceita apenas caminhos relativos da própria aplicação. */
 function safeNext(value: unknown): string {
@@ -36,20 +37,21 @@ export const Route = createFileRoute("/auth")({
   }),
   head: () => ({
     meta: [
-      { title: "Acesso da Equipe — Navalha de Ouro" },
+      { title: `Acesso da equipe — ${PLATFORM.name}` },
       {
         name: "description",
-        content:
-          "Área restrita da barbearia Navalha de Ouro: entre para gerenciar clientes, equipe e agenda.",
+        content: "Entre para criar e gerenciar suas barbearias, equipe, clientes e agenda.",
       },
-      { property: "og:title", content: "Acesso da Equipe — Navalha de Ouro" },
+      { property: "og:title", content: `Acesso da equipe — ${PLATFORM.name}` },
       {
         property: "og:description",
-        content: "Entre na conta da barbearia para acessar o painel de gestão.",
+        content: "Entre na sua conta para acessar o painel de gestão.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
+    links: [{ rel: "canonical", href: absoluteUrl("/auth") }],
   }),
   component: AuthPage,
 });

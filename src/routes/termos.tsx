@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { PLATFORM } from "@/lib/barber-store";
+import { absoluteUrl } from "@/lib/site-url";
 
 export const Route = createFileRoute("/termos")({
   head: () => ({
@@ -8,6 +9,7 @@ export const Route = createFileRoute("/termos")({
       { title: `Termos de Uso — ${PLATFORM.name}` },
       { name: "description", content: "Termos de uso da plataforma BarberLink." },
     ],
+    links: [{ rel: "canonical", href: absoluteUrl("/termos") }],
   }),
   component: TermsPage,
 });

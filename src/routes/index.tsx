@@ -4,6 +4,7 @@ import { ArrowRight, Check, MapPin, Scissors, Sparkles, Store } from "lucide-rea
 import heroImage from "@/assets/hero-barbearia.jpg";
 import { Button } from "@/components/ui/button";
 import { PLATFORM } from "@/lib/barber-store";
+import { absoluteUrl, SITE_URL } from "@/lib/site-url";
 import { useShopDirectory } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/")({
@@ -22,8 +23,15 @@ export const Route = createFileRoute("/")({
           "Página pronta, link exclusivo e agenda online para a sua barbearia. Teste 30 dias grátis e continue no plano Pro.",
       },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: SITE_URL },
+      { property: "og:image", content: absoluteUrl(heroImage) },
+      {
+        property: "og:image:alt",
+        content: "Barbearia clássica com cadeira de couro e detalhes dourados",
+      },
       { name: "twitter:card", content: "summary_large_image" },
     ],
+    links: [{ rel: "canonical", href: SITE_URL }],
   }),
   component: Home,
 });
