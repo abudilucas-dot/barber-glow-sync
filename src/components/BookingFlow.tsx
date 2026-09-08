@@ -1,20 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Check, ChevronLeft, Scissors, User } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Check,
-  ChevronLeft,
-  Clock,
-  Scissors,
-  User,
-  CalendarDays,
-} from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  TIME_SLOTS,
   formatBR,
+  formatDuration,
   maskPhone,
   nextDays,
   onlyDigits,
@@ -23,70 +15,105 @@ import {
 import type { Barber, Shop, ShopService } from "@/lib/shop-store";
 import { cn } from "@/lib/utils";
 
-const STEPS = ["Identificação", "Agendamento", "Confirmação"] as const;
-
+const STEPS = ["Serviço", "Profissional", "Data e horário", "Seus dados", "Confirmação"] as const;
+type Slot = { barberId: string; startTime: string; endTime: string };
 type SavedClient = { name: string; phone: string };
 
-function savedKey(slug: string) {
-  return `barberlink:cliente:${slug}`;
-}
-
-function readSaved(slug: string): SavedClient | null {
-  try {
-    const raw = localStorage.getItem(savedKey(slug));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SavedClient;
-    if (!parsed?.name || !parsed?.phone) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-export type BookingResult = { ok: boolean; error?: string };
+const storageKey = (slug: string) => `barberlink:cliente:${slug}`;
 
 export function BookingFlow({
   shop,
   services,
   barbers,
-  isSlotTaken,
+  initialServiceId,
+  getAvailableSlots,
   onBook,
 }: {
   shop: Shop;
   services: ShopService[];
   barbers: Barber[];
-  isSlotTaken: (barberId: string, date: string, time: string) => boolean;
+  initialServiceId?: string;
+  getAvailableSlots: (serviceId: string, date: string, barberId?: string | null) => Promise<Slot[]>;
   onBook: (input: {
     name: string;
     whatsapp: string;
-    barberId: string;
-    service: string;
+    serviceId: string;
+    barberId: string | null;
     date: string;
-    time: string;
-  }) => Promise<BookingResult>;
+    startTime: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
 }) {
-  const days = useMemo(() => nextDays(7), []);
+  const days = useMemo(() => nextDays(14), []);
   const [step, setStep] = useState(0);
+  const [serviceId, setServiceId] = useState(initialServiceId ?? "");
+  const [barberId, setBarberId] = useState<string | null>(null);
+  const [date, setDate] = useState(days[0]?.iso ?? "");
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [saved, setSaved] = useState<SavedClient | null>(null);
-  const [service, setService] = useState<string>("");
-  const [barber, setBarber] = useState<Barber | null>(null);
-  const [date, setDate] = useState(days[0]?.iso ?? "");
-  const [time, setTime] = useState("");
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const [sending, setSending] = useState(false);
+  const service = services.find((item) => item.id === serviceId) ?? null;
+  const professional =
+    barbers.find((item) => item.id === (selectedSlot?.barberId ?? barberId)) ?? null;
 
   useEffect(() => {
-    const s = readSaved(shop.slug);
-    if (s) {
-      setSaved(s);
-      setName(s.name);
-      setPhone(s.phone);
+    if (initialServiceId && services.some((item) => item.id === initialServiceId)) {
+      setServiceId(initialServiceId);
+      setStep(1);
+    }
+  }, [initialServiceId, services]);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(
+        localStorage.getItem(storageKey(shop.slug)) ?? "null",
+      ) as SavedClient | null;
+      if (stored?.name && stored.phone) {
+        setName(stored.name);
+        setPhone(stored.phone);
+      }
+    } catch {
+      /* local data is optional */
     }
   }, [shop.slug]);
 
-  function submitIdentity(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    if (step !== 2 || !serviceId) return undefined;
+    let mounted = true;
+    setLoadingSlots(true);
+    setSelectedSlot(null);
+    void getAvailableSlots(serviceId, date, barberId).then((items) => {
+      if (mounted) {
+        setSlots(items);
+        setLoadingSlots(false);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [barberId, date, getAvailableSlots, serviceId, step]);
+
+  function next(target: number) {
+    if (target === 1 && !service) {
+      toast.error("Escolha um serviço.");
+      return;
+    }
+    if (target === 2 && barbers.filter((item) => item.active).length === 0) {
+      toast.error("Nenhum profissional disponível.");
+      return;
+    }
+    if (target === 3 && !selectedSlot) {
+      toast.error("Escolha um horário.");
+      return;
+    }
+    setStep(target);
+  }
+
+  async function confirm() {
+    if (!service || !selectedSlot || !professional) return;
     if (name.trim().length < 3) {
       toast.error("Informe seu nome completo.");
       return;
@@ -95,372 +122,302 @@ export function BookingFlow({
       toast.error("Informe um WhatsApp válido com DDD.");
       return;
     }
-    setStep(1);
-  }
-
-  async function confirm() {
-    if (!service) {
-      toast.error("Escolha um serviço.");
+    if (!privacyAccepted) {
+      toast.error("Confirme o uso dos seus dados para concluir o agendamento.");
       return;
     }
-    if (!barber) {
-      toast.error("Escolha um barbeiro.");
-      return;
-    }
-    if (!date) {
-      toast.error("Escolha um dia.");
-      return;
-    }
-    if (!time) {
-      toast.error("Escolha um horário.");
-      return;
-    }
-
     setSending(true);
-    const res = await onBook({
+    const result = await onBook({
       name: name.trim(),
       whatsapp: phone,
-      barberId: barber.id,
-      service,
+      serviceId: service.id,
+      barberId: selectedSlot.barberId,
       date,
-      time,
+      startTime: selectedSlot.startTime,
     });
     setSending(false);
-    if (!res.ok) {
-      toast.error(res.error ?? "Não foi possível concluir o agendamento.");
+    if (!result.ok) {
+      toast.error(result.error ?? "Não foi possível concluir a reserva.");
       return;
     }
-
     try {
       localStorage.setItem(
-        savedKey(shop.slug),
+        storageKey(shop.slug),
         JSON.stringify({ name: name.trim(), phone } satisfies SavedClient),
       );
-      setSaved({ name: name.trim(), phone });
     } catch {
-      /* armazenamento indisponível */
+      /* optional */
     }
-
-    const message = `Olá ${barber.name}! Sou o(a) ${name.trim()}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time} na ${shop.name}.`;
-    window.open(waLink(barber.whatsapp, message), "_blank", "noopener");
-    setStep(2);
+    setStep(4);
     toast.success("Agendamento confirmado!");
-  }
-
-  function reset() {
-    setStep(0);
-    setService("");
-    setBarber(null);
-    setDate(days[0]?.iso ?? "");
-    setTime("");
-  }
-
-  function signOutClient() {
-    try {
-      localStorage.removeItem(savedKey(shop.slug));
-    } catch {
-      /* ignore */
-    }
-    setSaved(null);
-    setName("");
-    setPhone("");
-    setStep(0);
   }
 
   return (
     <div className="panel-lux rounded-2xl p-5 sm:p-7">
-      <ol className="mb-7 flex items-center gap-2 text-[11px] uppercase tracking-[0.18em]">
-        {STEPS.map((label, i) => (
-          <li key={label} className="flex flex-1 items-center gap-2">
-            <span
-              className={cn(
-                "flex size-7 shrink-0 items-center justify-center rounded-full border text-xs font-semibold",
-                i < step && "border-gold bg-gold text-primary-foreground",
-                i === step && "border-gold text-gold",
-                i > step && "border-border text-muted-foreground",
-              )}
-            >
-              {i < step ? <Check className="size-3.5" /> : i + 1}
-            </span>
-            <span
-              className={cn(
-                "hidden sm:inline",
-                i === step ? "text-gold" : "text-muted-foreground",
-              )}
-            >
-              {label}
-            </span>
-            {i < STEPS.length - 1 && <span className="gold-rule flex-1" />}
-          </li>
-        ))}
-      </ol>
-
+      <div className="mb-3 flex justify-between text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        <span>Passo {step + 1} de 5</span>
+        <span className="text-gold">{STEPS[step]}</span>
+      </div>
+      <div className="mb-7 h-1 overflow-hidden rounded bg-border">
+        <div className="h-full bg-gold" style={{ width: `${((step + 1) / 5) * 100}%` }} />
+      </div>
       {step === 0 && (
-        <form onSubmit={submitIdentity} className="space-y-5">
-          {saved ? (
-            <div className="rounded-xl border border-gold/40 bg-accent/40 p-4">
-              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                Já é cliente da casa
-              </p>
-              <p className="mt-1 text-sm font-semibold text-gold">{saved.name}</p>
-              <p className="text-xs text-muted-foreground">{saved.phone}</p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Button type="submit" className="flex-1">
-                  Continuar como {saved.name.split(" ")[0]}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={signOutClient}
-                  className="sm:w-44"
-                >
-                  Usar outro cadastro
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div>
-              <h3 className="text-xl">Vamos começar</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Precisamos do seu nome e WhatsApp para reservar a cadeira.
-              </p>
-            </div>
-          )}
-          <div className="space-y-2">
-            <Label htmlFor="cli-nome">Nome completo</Label>
-            <Input
-              id="cli-nome"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex.: João Pedro Silva"
-              autoComplete="name"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="cli-zap">WhatsApp</Label>
-            <Input
-              id="cli-zap"
-              value={phone}
-              onChange={(e) => setPhone(maskPhone(e.target.value))}
-              placeholder="(11) 99999-0000"
-              inputMode="tel"
-            />
-          </div>
-          <Button type="submit" size="lg" className="w-full">
-            Continuar
-          </Button>
-        </form>
-      )}
-
-      {step === 1 && (
-        <div className="space-y-8">
-          <section className="space-y-3">
-            <SectionTitle icon={<Scissors className="size-4" />} title="Serviço" />
-            {services.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Esta barbearia ainda não cadastrou serviços.
-              </p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {services.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => setService(s.name)}
-                    className={cn(
-                      "flex items-center justify-between rounded-xl border px-4 py-3 text-left text-sm transition-colors",
-                      service === s.name
-                        ? "border-gold bg-accent text-gold"
-                        : "border-border bg-surface-2/40 hover:border-gold/50",
-                    )}
-                  >
-                    <span>{s.name}</span>
-                    <span className="font-semibold">R$ {s.price}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="space-y-3">
-            <SectionTitle icon={<User className="size-4" />} title="Barbeiro" />
-            {barbers.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Nenhum barbeiro cadastrado nesta barbearia.
-              </p>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {barbers.map((b) => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => {
-                      setBarber(b);
-                      setTime("");
-                    }}
-                    className={cn(
-                      "rounded-xl border px-4 py-3 text-left transition-colors",
-                      barber?.id === b.id
-                        ? "border-gold bg-accent"
-                        : "border-border bg-surface-2/40 hover:border-gold/50",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "block text-sm font-semibold",
-                        barber?.id === b.id && "text-gold",
-                      )}
-                    >
-                      {b.name}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">
-                      {b.specialty}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="space-y-3">
-            <SectionTitle icon={<CalendarDays className="size-4" />} title="Dia" />
-            <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
-              {days.map((d, i) => (
+        <section className="space-y-4">
+          <Title icon={<Scissors className="size-4" />} text="Escolha o serviço" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {services
+              .filter((item) => item.active)
+              .map((item) => (
                 <button
-                  key={d.iso}
+                  key={item.id}
                   type="button"
-                  onClick={() => {
-                    setDate(d.iso);
-                    setTime("");
-                  }}
+                  onClick={() => setServiceId(item.id)}
                   className={cn(
-                    "rounded-xl border py-2.5 text-center transition-colors",
-                    date === d.iso
-                      ? "border-gold bg-accent text-gold"
+                    "rounded-xl border p-4 text-left",
+                    serviceId === item.id
+                      ? "border-gold bg-accent"
                       : "border-border bg-surface-2/40 hover:border-gold/50",
                   )}
                 >
-                  <span className="block text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {i === 0 ? "hoje" : d.weekday}
-                  </span>
-                  <span className="block text-lg font-semibold">{d.day}</span>
-                  <span className="block text-[10px] uppercase text-muted-foreground">
-                    {d.month}
+                  <strong>{item.name}</strong>
+                  {item.description && (
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      {item.description}
+                    </span>
+                  )}
+                  <span className="mt-3 block text-sm text-gold">
+                    R$ {item.price} · {formatDuration(item.durationMinutes)}
                   </span>
                 </button>
               ))}
+          </div>
+          <Button size="lg" className="w-full" onClick={() => next(1)}>
+            Continuar
+          </Button>
+        </section>
+      )}
+      {step === 1 && (
+        <section className="space-y-4">
+          <Title icon={<User className="size-4" />} text="Escolha o profissional" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setBarberId(null)}
+              className={cn(
+                "rounded-xl border p-4 text-left",
+                barberId === null ? "border-gold bg-accent" : "border-border bg-surface-2/40",
+              )}
+            >
+              <strong>Qualquer profissional</strong>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Primeiro horário compatível.
+              </span>
+            </button>
+            {barbers
+              .filter((item) => item.active)
+              .map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setBarberId(item.id)}
+                  className={cn(
+                    "rounded-xl border p-4 text-left",
+                    barberId === item.id
+                      ? "border-gold bg-accent"
+                      : "border-border bg-surface-2/40",
+                  )}
+                >
+                  <strong>{item.name}</strong>
+                  <span className="mt-1 block text-xs text-muted-foreground">{item.specialty}</span>
+                </button>
+              ))}
+          </div>
+          <Actions back={() => setStep(0)} next={() => next(2)} />
+        </section>
+      )}
+      {step === 2 && (
+        <section className="space-y-5">
+          <Title icon={<CalendarDays className="size-4" />} text="Data e horário" />
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+            {days.map((item, index) => (
+              <button
+                key={item.iso}
+                type="button"
+                onClick={() => setDate(item.iso)}
+                className={cn(
+                  "rounded-xl border py-2 text-center",
+                  date === item.iso
+                    ? "border-gold bg-accent text-gold"
+                    : "border-border bg-surface-2/40",
+                )}
+              >
+                <span className="block text-[10px] uppercase">
+                  {index === 0 ? "hoje" : item.weekday}
+                </span>
+                <span className="block text-lg font-semibold">{item.day}</span>
+              </button>
+            ))}
+          </div>
+          {loadingSlots ? (
+            <p className="text-sm text-muted-foreground">Calculando horários…</p>
+          ) : slots.length === 0 ? (
+            <p className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
+              Não há horários compatíveis nesta data.
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+              {slots.map((slot) => (
+                <button
+                  key={`${slot.barberId}-${slot.startTime}`}
+                  type="button"
+                  onClick={() => setSelectedSlot(slot)}
+                  className={cn(
+                    "rounded-xl border px-2 py-3",
+                    selectedSlot?.barberId === slot.barberId &&
+                      selectedSlot.startTime === slot.startTime
+                      ? "border-gold bg-accent text-gold"
+                      : "border-border bg-surface-2/40",
+                  )}
+                >
+                  <strong>{slot.startTime.slice(0, 5)}</strong>
+                  {barberId === null && (
+                    <span className="mt-1 block truncate text-[10px] text-muted-foreground">
+                      {barbers.find((item) => item.id === slot.barberId)?.name}
+                    </span>
+                  )}
+                </button>
+              ))}
             </div>
-          </section>
-
-          <section className="space-y-3">
-            <SectionTitle icon={<Clock className="size-4" />} title="Horário" />
-            {!barber ? (
-              <p className="text-sm text-muted-foreground">
-                Selecione um barbeiro para ver os horários livres.
-              </p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-                {TIME_SLOTS.map((slot) => {
-                  const taken = isSlotTaken(barber.id, date, slot);
-                  return (
-                    <button
-                      key={slot}
-                      type="button"
-                      disabled={taken}
-                      onClick={() => setTime(slot)}
-                      className={cn(
-                        "rounded-xl border px-2 py-2.5 text-center text-sm transition-colors",
-                        taken &&
-                          "cursor-not-allowed border-destructive/60 bg-destructive/20 text-destructive-foreground/70",
-                        !taken && time === slot && "border-gold bg-accent text-gold",
-                        !taken &&
-                          time !== slot &&
-                          "border-border bg-surface-2/40 hover:border-gold/50",
-                      )}
-                    >
-                      <span className="block font-semibold">{slot}</span>
-                      <span className="block text-[10px] uppercase tracking-wider">
-                        {taken ? "Ocupado" : "Livre"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
+          )}
+          <Actions back={() => setStep(1)} next={() => next(3)} />
+        </section>
+      )}
+      {step === 3 && (
+        <section className="space-y-5">
+          <Title icon={<User className="size-4" />} text="Seus dados" />
+          <div className="space-y-2">
+            <Label htmlFor="booking-name">Nome completo</Label>
+            <Input
+              id="booking-name"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="booking-phone">WhatsApp</Label>
+            <Input
+              id="booking-phone"
+              inputMode="tel"
+              autoComplete="tel"
+              value={phone}
+              onChange={(e) => setPhone(maskPhone(e.target.value))}
+            />
+          </div>
+          <div className="rounded-xl border border-border bg-surface-2/40 p-4 text-sm">
+            <Summary label="Barbearia" value={shop.name} />
+            <Summary label="Serviço" value={service?.name ?? "-"} />
+            <Summary label="Profissional" value={professional?.name ?? "-"} />
+            <Summary label="Data" value={formatBR(date)} />
+            <Summary label="Horário" value={selectedSlot?.startTime.slice(0, 5) ?? "-"} />
+            <Summary
+              label="Duração"
+              value={service ? formatDuration(service.durationMinutes) : "-"}
+            />
+            <Summary label="Preço" value={service ? `R$ ${service.price}` : "-"} />
+          </div>
+          <label className="flex cursor-pointer gap-3 rounded-xl border border-border p-3 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={privacyAccepted}
+              onChange={(event) => setPrivacyAccepted(event.target.checked)}
+              className="mt-0.5 size-4 accent-yellow-500"
+            />
+            <span>
+              Autorizo o uso do meu nome e WhatsApp para registrar este agendamento e receber
+              comunicações relacionadas a ele, conforme a{" "}
+              <a href="/privacidade" className="text-gold hover:underline">
+                Política de Privacidade
+              </a>
+              .
+            </span>
+          </label>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Button variant="outline" onClick={() => setStep(0)} className="sm:w-40">
+            <Button variant="outline" onClick={() => setStep(2)} className="sm:w-40">
               <ChevronLeft className="size-4" /> Voltar
             </Button>
-            <Button size="lg" onClick={confirm} disabled={sending} className="flex-1">
-              {sending ? "Enviando..." : "Confirmar e enviar no WhatsApp"}
+            <Button size="lg" disabled={sending} onClick={() => void confirm()} className="flex-1">
+              {sending ? "Confirmando…" : "Confirmar agendamento"}
             </Button>
           </div>
-        </div>
+        </section>
       )}
-
-      {step === 2 && (
-        <div className="space-y-6 text-center">
+      {step === 4 && (
+        <section className="space-y-6 text-center">
           <div className="mx-auto flex size-14 items-center justify-center rounded-full border border-gold text-gold">
             <Check className="size-7" />
           </div>
           <div>
-            <h3 className="text-2xl text-gilded">Horário reservado!</h3>
+            <h3 className="text-2xl text-gilded">Agendamento confirmado</h3>
             <p className="mt-2 text-sm text-muted-foreground">
-              Abrimos o WhatsApp de {barber?.name} com sua mensagem. Caso a janela
-              tenha sido bloqueada, use o botão abaixo.
+              Sua reserva foi registrada na agenda da barbearia.
             </p>
           </div>
-          <div className="mx-auto max-w-sm space-y-2 rounded-xl border border-border bg-surface-2/40 p-4 text-left text-sm">
-            <Row label="Cliente" value={name} />
-            <Row label="Serviço" value={service} />
-            <Row label="Barbeiro" value={barber?.name ?? "-"} />
-            <Row label="Data" value={formatBR(date)} />
-            <Row label="Horário" value={time} />
-            <Row label="Local" value={shop.name} />
-          </div>
-          {barber && (
-            <Button asChild size="lg" className="w-full sm:w-auto">
+          {shop.ownerWhatsapp && (
+            <Button asChild variant="outline">
               <a
                 href={waLink(
-                  barber.whatsapp,
-                  `Olá ${barber.name}! Sou o(a) ${name}. Agendei o serviço ${service} para o dia ${formatBR(date)} às ${time} na ${shop.name}.`,
+                  shop.ownerWhatsapp,
+                  `Olá! Tenho um agendamento na ${shop.name} para ${formatBR(date)} às ${selectedSlot?.startTime.slice(0, 5)}.`,
                 )}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Reabrir WhatsApp do barbeiro
+                Falar com a barbearia
               </a>
             </Button>
           )}
           <button
             type="button"
-            onClick={reset}
             className="block w-full text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-gold"
+            onClick={() => {
+              setStep(0);
+              setSelectedSlot(null);
+            }}
           >
-            Fazer novo agendamento
+            Novo agendamento
           </button>
-        </div>
+        </section>
       )}
     </div>
   );
 }
 
-function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
+function Title({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
     <div className="flex items-center gap-2 text-gold">
       {icon}
-      <h4 className="text-xs uppercase tracking-[0.25em]">{title}</h4>
+      <h3 className="text-xs uppercase tracking-[0.25em]">{text}</h3>
     </div>
   );
 }
-
-function Row({ label, value }: { label: string; value: string }) {
+function Summary({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-4">
+    <div className="flex justify-between gap-4 py-1">
       <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium">{value}</span>
+      <span className="text-right font-medium">{value}</span>
+    </div>
+  );
+}
+function Actions({ back, next }: { back: () => void; next: () => void }) {
+  return (
+    <div className="flex flex-col-reverse gap-2 sm:flex-row">
+      <Button variant="outline" onClick={back} className="sm:w-40">
+        <ChevronLeft className="size-4" /> Voltar
+      </Button>
+      <Button size="lg" onClick={next} className="flex-1">
+        Continuar
+      </Button>
     </div>
   );
 }

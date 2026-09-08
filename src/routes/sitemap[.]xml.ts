@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type {} from "@tanstack/react-start";
 
-const BASE_URL = "https://barber-glow-sync.lovable.app";
+const BASE_URL = (
+  process.env["VITE_PUBLIC_SITE_URL"] ?? "https://barber-glow-sync.lovable.app"
+).replace(/\/$/, "");
 
 interface SitemapEntry {
   path: string;
@@ -21,8 +23,8 @@ export const Route = createFileRoute("/sitemap.xml")({
         // Barbearias no ar (Pro ou dentro do teste de 30 dias).
         try {
           const { createClient } = await import("@supabase/supabase-js");
-          const key = process.env['SUPABASE_PUBLISHABLE_KEY'] ?? "";
-          const client = createClient(process.env['SUPABASE_URL'] ?? "", key, {
+          const key = process.env["SUPABASE_PUBLISHABLE_KEY"] ?? "";
+          const client = createClient(process.env["SUPABASE_URL"] ?? "", key, {
             auth: { persistSession: false },
             global: {
               fetch: (input, init) => {
@@ -44,8 +46,7 @@ export const Route = createFileRoute("/sitemap.xml")({
             plan: string;
             trial_ends_at: string;
           }>) {
-            const live =
-              shop.plan === "pro" || new Date(shop.trial_ends_at).getTime() > Date.now();
+            const live = shop.plan === "pro" || new Date(shop.trial_ends_at).getTime() > Date.now();
             if (live) {
               entries.push({ path: `/${shop.slug}`, changefreq: "weekly", priority: "0.9" });
             }

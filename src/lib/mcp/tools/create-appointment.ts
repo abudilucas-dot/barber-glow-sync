@@ -6,69 +6,52 @@ export default defineTool({
   name: "create_appointment",
   title: "Criar agendamento",
   description:
-    "Cadastra o cliente (se necessário) e cria um agendamento para um barbeiro em uma data e horário livres.",
+    "Cria uma reserva validada pela agenda da barbearia; conflitos, duração e expediente são verificados no banco.",
   inputSchema: {
-    client_name: z.string().trim().min(2).describe("Nome completo do cliente."),
-    client_whatsapp: z
+    shop_id: z.string().uuid().describe("ID da barbearia."),
+    service_id: z.string().uuid().describe("ID do serviço (use list_services)."),
+    barber_id: z
       .string()
-      .trim()
-      .min(8)
-      .describe("WhatsApp do cliente com DDD."),
-    barber_id: z.string().uuid().describe("ID do barbeiro (use list_barbers)."),
-    service: z.string().trim().min(2).describe("Serviço escolhido."),
+      .uuid()
+      .nullable()
+      .optional()
+      .describe("ID do barbeiro; omita para qualquer profissional."),
+    client_name: z.string().trim().min(2).describe("Nome completo do cliente."),
+    client_whatsapp: z.string().trim().min(8).describe("WhatsApp do cliente com DDD."),
     date: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
-      .describe("Data no formato YYYY-MM-DD."),
+      .describe("Data YYYY-MM-DD."),
     time: z
       .string()
       .regex(/^\d{2}:\d{2}$/)
-      .describe("Horário no formato HH:mm, das 09:00 às 18:00."),
+      .describe("Horário HH:mm."),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async (input, ctx) => {
     if (!ctx.isAuthenticated()) return notAuthenticated();
-    const supabase = supabaseForUser(ctx);
-
-    const { data: client, error: clientError } = await supabase
-      .from("clients")
-      .insert({ name: input.client_name, whatsapp: input.client_whatsapp })
-      .select("id, name, whatsapp")
-      .single();
-    if (clientError || !client) {
-      return {
-        content: [
-          { type: "text", text: clientError?.message ?? "Falha ao salvar cliente." },
-        ],
-        isError: true,
-      };
-    }
-
-    const { data, error } = await supabase
-      .from("appointments")
-      .insert({
-        client_id: client.id,
-        barber_id: input.barber_id,
-        service: input.service,
-        date: input.date,
-        time: input.time,
+    const { data, error } = await supabaseForUser(ctx)
+      .rpc("create_booking", {
+        _shop_id: input.shop_id,
+        _service_id: input.service_id,
+        _barber_id: input.barber_id ?? null,
+        _date: input.date,
+        _start_time: input.time,
+        _client_name: input.client_name,
+        _client_phone: input.client_whatsapp,
       })
-      .select("id, service, date, time, barber_id, client_id")
       .single();
-    if (error) {
+    if (error || !data) {
       return {
         content: [
-          {
-            type: "text",
-            text: `Não foi possível agendar: ${error.message}. O horário pode já estar ocupado.`,
-          },
+          { type: "text", text: error?.message ?? "Não foi possível criar o agendamento." },
         ],
         isError: true,
       };
     }
     return {
-      content: [{ type: "text", text: JSON.stringify({ appointment: data, client }) }],
-      structuredContent: { appointment: data, client },
+      content: [{ type: "text", text: JSON.stringify({ appointment: data }) }],
+      structuredContent: { appointment: data },
     };
   },
 });

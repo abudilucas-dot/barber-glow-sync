@@ -14,12 +14,13 @@ export const FREE_LIMITS = {
   shops: 1,
 };
 
-export const TIME_SLOTS = Array.from({ length: 10 }, (_, i) =>
-  `${String(9 + i).padStart(2, "0")}:00`,
-);
-
-export const uid = () =>
-  `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+/** Renders the canonical integer duration stored in the database. */
+export function formatDuration(minutes: number) {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours}h ${remainder}min` : `${hours}h`;
+}
 
 export function todayISO() {
   const d = new Date();

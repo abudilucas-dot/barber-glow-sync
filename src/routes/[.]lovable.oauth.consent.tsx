@@ -24,16 +24,13 @@ type OAuthApi = {
   ) => Promise<{ data: OAuthResult | null; error: { message: string } | null }>;
 };
 
-const oauth = () =>
-  (supabase.auth as unknown as { oauth: OAuthApi }).oauth;
+const oauth = () => (supabase.auth as unknown as { oauth: OAuthApi }).oauth;
 
 export const Route = createFileRoute("/.lovable/oauth/consent")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>) => ({
     authorization_id:
-      typeof search['authorization_id'] === "string"
-        ? search['authorization_id']
-        : "",
+      typeof search["authorization_id"] === "string" ? search["authorization_id"] : "",
   }),
   beforeLoad: async ({ search, location }) => {
     if (!search.authorization_id) throw new Error("Missing authorization_id");
@@ -46,9 +43,7 @@ export const Route = createFileRoute("/.lovable/oauth/consent")({
     }
   },
   loader: async ({ location }) => {
-    const authorizationId = new URLSearchParams(location.searchStr).get(
-      "authorization_id",
-    )!;
+    const authorizationId = new URLSearchParams(location.searchStr).get("authorization_id")!;
     const { data, error } = await oauth().getAuthorizationDetails(authorizationId);
     if (error) throw new Error(error.message);
     const immediate = data?.redirect_url ?? data?.redirect_to;
@@ -70,8 +65,7 @@ function Consent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const clientName =
-    details?.client?.name ?? details?.client?.client_name ?? "este aplicativo";
+  const clientName = details?.client?.name ?? details?.client?.client_name ?? "este aplicativo";
 
   async function decide(approve: boolean) {
     setBusy(true);
@@ -103,8 +97,8 @@ function Consent() {
           <span className="text-gilded">Conectar {clientName}</span>
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          {clientName} poderá usar as ferramentas desta barbearia como você
-          enquanto estiver conectado.
+          {clientName} poderá usar as ferramentas desta barbearia como você enquanto estiver
+          conectado.
         </p>
         {details?.client?.redirect_uri && (
           <p className="mt-2 break-all text-xs text-muted-foreground">

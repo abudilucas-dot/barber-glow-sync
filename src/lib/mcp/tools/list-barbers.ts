@@ -4,8 +4,7 @@ import { notAuthenticated, supabaseForUser } from "../supabase";
 export default defineTool({
   name: "list_barbers",
   title: "Listar barbeiros",
-  description:
-    "Lista a equipe da barbearia com nome, especialidade e WhatsApp comercial.",
+  description: "Lista a equipe da barbearia com nome, especialidade e WhatsApp comercial.",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async (_input, ctx) => {

@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Check, Crown, Sparkles } from "lucide-react";
 
 import { PaymentTestModeBanner } from "@/components/PaymentTestModeBanner";
 import { Button } from "@/components/ui/button";
 import { PLATFORM } from "@/lib/barber-store";
+import { useMyShops } from "@/lib/shop-store";
 import { PLANS } from "@/lib/stripe";
 
 export const Route = createFileRoute("/precos")({
@@ -44,9 +46,20 @@ const PRO_ITEMS = [
 
 function PricingPage() {
   const navigate = useNavigate();
+  const { shops, ready, userId } = useMyShops();
+  const [shopId, setShopId] = useState("");
+
+  useEffect(() => {
+    if (!shopId && shops[0]) setShopId(shops[0].id);
+  }, [shopId, shops]);
 
   const goCheckout = (plan: "pro_monthly" | "pro_yearly") => {
-    void navigate({ to: "/checkout", search: { plan } });
+    if (!userId) {
+      void navigate({ to: "/auth", search: { next: "/precos" } });
+      return;
+    }
+    if (!shopId) return;
+    void navigate({ to: "/checkout", search: { plan, shop: shopId } });
   };
 
   return (
@@ -65,11 +78,37 @@ function PricingPage() {
             <span className="text-gilded">Planos</span>
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
-            Comece com 30 dias grátis. Ao fim do teste, assine o Pro para manter a
-            página da sua barbearia no ar.
+            Comece com 30 dias grátis. Ao fim do teste, assine o Pro para manter a página da sua
+            barbearia no ar.
           </p>
           <div className="gold-rule mx-auto mt-6 w-40" />
         </header>
+
+        {ready && userId && (
+          <section className="panel-lux mx-auto mt-8 max-w-xl rounded-2xl p-5">
+            <label htmlFor="shop" className="text-sm font-medium">
+              Barbearia que receberá o plano Pro
+            </label>
+            {shops.length > 0 ? (
+              <select
+                id="shop"
+                value={shopId}
+                onChange={(event) => setShopId(event.target.value)}
+                className="mt-2 h-11 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                {shops.map((shop) => (
+                  <option key={shop.id} value={shop.id}>
+                    {shop.name} (/{shop.slug})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Crie uma barbearia antes de assinar um plano.
+              </p>
+            )}
+          </section>
+        )}
 
         <div className="mt-10 grid gap-5 lg:grid-cols-3">
           <PlanCard
@@ -95,7 +134,11 @@ function PricingPage() {
             note="Renovação automática"
             items={PRO_ITEMS}
             action={
-              <Button className="h-12 w-full" onClick={() => goCheckout("pro_monthly")}>
+              <Button
+                className="h-12 w-full"
+                disabled={ready && !!userId && !shopId}
+                onClick={() => goCheckout("pro_monthly")}
+              >
                 Assinar mensal
               </Button>
             }
@@ -109,7 +152,11 @@ function PricingPage() {
             note="12x de R$ 37,50 no cartão — economize 25%"
             items={PRO_ITEMS}
             action={
-              <Button className="h-12 w-full" onClick={() => goCheckout("pro_yearly")}>
+              <Button
+                className="h-12 w-full"
+                disabled={ready && !!userId && !shopId}
+                onClick={() => goCheckout("pro_yearly")}
+              >
                 Assinar anual
               </Button>
             }

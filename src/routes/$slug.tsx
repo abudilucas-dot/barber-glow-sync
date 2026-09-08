@@ -1,25 +1,34 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  Clock,
-  Instagram,
-  MapPin,
-  MessageCircle,
-  Scissors,
-} from "lucide-react";
+import { ArrowLeft, Clock, Instagram, MapPin, MessageCircle, Scissors } from "lucide-react";
 
 import heroImage from "@/assets/hero-barbearia.jpg";
 import { BookingFlow } from "@/components/BookingFlow";
 import { Button } from "@/components/ui/button";
-import { PLATFORM, waLink } from "@/lib/barber-store";
+import { formatDuration, PLATFORM, waLink } from "@/lib/barber-store";
 import { isShopLive, usePublicShop } from "@/lib/shop-store";
 
 export const Route = createFileRoute("/$slug")({
-  head: ({ params }) => {
-    const pretty = params.slug
-      .split("-")
-      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-      .join(" ");
+  loader: async ({ params }) => {
+    const url = process.env["SUPABASE_URL"];
+    const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
+    if (!url || !key) return null;
+    const { createClient } = await import("@supabase/supabase-js");
+    const { data } = await createClient(url, key, { auth: { persistSession: false } })
+      .from("barbershops")
+      .select("name, tagline, about, hero_url")
+      .eq("slug", params.slug)
+      .maybeSingle();
+    return data;
+  },
+  head: ({ params, loaderData }) => {
+    const pretty =
+      loaderData?.name ??
+      params.slug
+        .split("-")
+        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+        .join(" ");
+    const siteUrl = import.meta.env["VITE_PUBLIC_SITE_URL"]?.replace(/\/$/, "");
+    const canonical = siteUrl ? `${siteUrl}/${params.slug}` : undefined;
     return {
       meta: [
         { title: `${pretty} — Agende seu horário online` },
@@ -34,7 +43,10 @@ export const Route = createFileRoute("/$slug")({
         },
         { property: "og:type", content: "website" },
         { name: "twitter:card", content: "summary_large_image" },
+        ...(canonical ? [{ property: "og:url", content: canonical }] : []),
+        ...(loaderData?.hero_url ? [{ property: "og:image", content: loaderData.hero_url }] : []),
       ],
+      links: canonical ? [{ rel: "canonical", href: canonical }] : [],
     };
   },
   component: ShopPage,
@@ -42,7 +54,7 @@ export const Route = createFileRoute("/$slug")({
 
 function ShopPage() {
   const { slug } = Route.useParams();
-  const { shop, services, hours, barbers, ready, isSlotTaken, bookAppointment } =
+  const { shop, services, hours, barbers, ready, getAvailableSlots, createBooking } =
     usePublicShop(slug);
 
   if (!ready) {
@@ -86,9 +98,7 @@ function ShopPage() {
         <h1 className="text-4xl leading-tight sm:text-5xl">
           <span className="text-gilded">{shop.name}</span>
         </h1>
-        {shop.tagline && (
-          <p className="mt-2 text-sm text-muted-foreground">{shop.tagline}</p>
-        )}
+        {shop.tagline && <p className="mt-2 text-sm text-muted-foreground">{shop.tagline}</p>}
         <div className="gold-rule mx-auto mt-6 w-40" />
       </header>
 
@@ -102,9 +112,7 @@ function ShopPage() {
         />
       </div>
 
-      {shop.about && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">{shop.about}</p>
-      )}
+      {shop.about && <p className="mt-6 text-center text-sm text-muted-foreground">{shop.about}</p>}
 
       <nav className="mt-8 grid gap-3">
         <Button asChild size="lg" className="h-14 text-base">
@@ -143,10 +151,10 @@ function ShopPage() {
               <li key={s.id} className="flex items-baseline gap-3 py-3">
                 <span className="text-sm font-medium">{s.name}</span>
                 <span className="mx-1 h-px flex-1 border-b border-dashed border-border" />
-                <span className="text-xs text-muted-foreground">{s.duration}</span>
-                <span className="w-20 text-right font-semibold text-gold">
-                  R$ {s.price},00
+                <span className="text-xs text-muted-foreground">
+                  {formatDuration(s.durationMinutes)}
                 </span>
+                <span className="w-20 text-right font-semibold text-gold">R$ {s.price}</span>
               </li>
             ))}
           </ul>
@@ -178,9 +186,9 @@ function ShopPage() {
           shop={shop}
           services={services}
           barbers={barbers}
-          isSlotTaken={isSlotTaken}
+          getAvailableSlots={getAvailableSlots}
           onBook={async (input) => {
-            const res = await bookAppointment(input);
+            const res = await createBooking(input);
             return res.ok ? { ok: true } : { ok: false, error: res.error };
           }}
         />
@@ -189,6 +197,14 @@ function ShopPage() {
       <footer className="mt-12 text-center text-xs text-muted-foreground">
         <p>
           © {new Date().getFullYear()} {shop.name}. Página criada com {PLATFORM.name}.
+        </p>
+        <p className="mt-3 flex justify-center gap-4">
+          <Link to="/privacidade" className="hover:text-gold">
+            Privacidade
+          </Link>
+          <Link to="/termos" className="hover:text-gold">
+            Termos
+          </Link>
         </p>
       </footer>
     </main>

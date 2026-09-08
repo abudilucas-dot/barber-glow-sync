@@ -9,7 +9,7 @@ export type SubscriptionRow = {
   cancel_at_period_end: boolean;
 };
 
-export function useSubscription() {
+export function useSubscription(shopId?: string | null) {
   const [subscription, setSubscription] = useState<SubscriptionRow | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -29,17 +29,18 @@ export function useSubscription() {
       setReady(true);
       return;
     }
-    const { data } = await supabase
+    let query = supabase
       .from("subscriptions")
       .select("status, price_id, current_period_end, cancel_at_period_end")
       .eq("user_id", uid)
       .eq("environment", env)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    if (shopId) query = query.eq("shop_id", shopId);
+    const { data } = await query.maybeSingle();
     setSubscription((data as SubscriptionRow | null) ?? null);
     setReady(true);
-  }, []);
+  }, [shopId]);
 
   useEffect(() => {
     void refresh();

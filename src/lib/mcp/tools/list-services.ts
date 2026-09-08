@@ -1,6 +1,5 @@
 import { defineTool } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { TIME_SLOTS } from "@/lib/barber-store";
 import { notAuthenticated, supabaseForUser } from "../supabase";
 
 export default defineTool({
@@ -39,7 +38,7 @@ export default defineTool({
       shop,
       services: services.data ?? [],
       hours: hours.data ?? [],
-      timeSlots: TIME_SLOTS,
+      timeSlots: "Disponibilidade calculada dinamicamente em intervalos de 15 minutos.",
     };
     return {
       content: [{ type: "text" as const, text: JSON.stringify(payload) }],

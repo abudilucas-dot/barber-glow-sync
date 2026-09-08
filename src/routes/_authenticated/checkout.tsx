@@ -6,8 +6,11 @@ import { StripeEmbeddedCheckout } from "@/components/StripeEmbeddedCheckout";
 import { PLANS, type PlanId } from "@/lib/stripe";
 
 export const Route = createFileRoute("/_authenticated/checkout")({
-  validateSearch: (search: Record<string, unknown>): { plan: PlanId } => ({
-    plan: search['plan'] === "pro_yearly" ? "pro_yearly" : "pro_monthly",
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { plan: PlanId; shop?: string | undefined } => ({
+    plan: search["plan"] === "pro_yearly" ? "pro_yearly" : "pro_monthly",
+    shop: typeof search["shop"] === "string" ? search["shop"] : undefined,
   }),
   head: () => ({
     meta: [
@@ -23,7 +26,7 @@ export const Route = createFileRoute("/_authenticated/checkout")({
 });
 
 function CheckoutPage() {
-  const { plan } = Route.useSearch();
+  const { plan, shop } = Route.useSearch();
   const info = PLANS[plan];
 
   return (
@@ -46,16 +49,23 @@ function CheckoutPage() {
           <div className="gold-rule mt-5" />
         </header>
 
-        <div className="mt-6">
-          <StripeEmbeddedCheckout
-            priceId={info.priceId}
-            returnUrl={
-              typeof window !== "undefined"
-                ? `${window.location.origin}/checkout-retorno?session_id={CHECKOUT_SESSION_ID}`
-                : undefined
-            }
-          />
-        </div>
+        {shop ? (
+          <div className="mt-6">
+            <StripeEmbeddedCheckout
+              priceId={info.priceId}
+              shopId={shop}
+              returnUrl={
+                typeof window !== "undefined"
+                  ? `${window.location.origin}/checkout-retorno?session_id={CHECKOUT_SESSION_ID}`
+                  : undefined
+              }
+            />
+          </div>
+        ) : (
+          <p className="panel-lux mt-6 rounded-2xl p-5 text-sm text-muted-foreground">
+            Escolha uma barbearia no painel antes de iniciar a assinatura.
+          </p>
+        )}
       </main>
     </>
   );

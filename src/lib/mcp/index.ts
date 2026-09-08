@@ -8,8 +8,7 @@ import listAppointments from "./tools/list-appointments";
 import createAppointment from "./tools/create-appointment";
 import cancelAppointment from "./tools/cancel-appointment";
 
-const projectRef =
-  import.meta.env['VITE_SUPABASE_PROJECT_ID'] ?? "project-ref-unset";
+const projectRef = import.meta.env["VITE_SUPABASE_PROJECT_ID"] ?? "project-ref-unset";
 
 export default defineMcp({
   name: "barber-hub-pro",

@@ -8,6 +8,7 @@ import {
   Crown,
   Eraser,
   ExternalLink,
+  LogOut,
   Pencil,
   Plus,
   Scissors,
@@ -21,14 +22,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  FREE_LIMITS,
-  formatBR,
-  maskPhone,
-  onlyDigits,
-  slugify,
-} from "@/lib/barber-store";
+import { FREE_LIMITS, formatBR, maskPhone, onlyDigits, slugify } from "@/lib/barber-store";
 import { trialDaysLeft, useMyShops, useShopAdmin } from "@/lib/shop-store";
+import { useSubscription } from "@/hooks/useSubscription";
+import { createPortalSession } from "@/utils/payments.functions";
+import { getStripeEnvironment } from "@/lib/stripe";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -55,17 +54,23 @@ export const Route = createFileRoute("/_authenticated/admin")({
 function AdminPage() {
   const { shops, ready: shopsReady, createShop, refresh: refreshShops } = useMyShops();
   const [selected, setSelected] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   useEffect(() => {
-    if (!selected && shops.length > 0) setSelected(shops[0]!.id);
-  }, [shops, selected]);
+    if (!isCreating && !selected && shops.length > 0) setSelected(shops[0]!.id);
+  }, [isCreating, shops, selected]);
 
   const admin = useShopAdmin(selected);
+  const subscription = useSubscription(selected);
   const isPro = admin.shop?.plan === "pro";
   const daysLeft = admin.shop ? trialDaysLeft(admin.shop) : 0;
 
   if (!shopsReady) {
-    return <Shell><p className="text-sm text-muted-foreground">Carregando...</p></Shell>;
+    return (
+      <Shell>
+        <p className="text-sm text-muted-foreground">Carregando...</p>
+      </Shell>
+    );
   }
 
   if (shops.length === 0) {
@@ -79,6 +84,7 @@ function AdminPage() {
               return;
             }
             toast.success("Barbearia criada! Agora personalize sua página.");
+            setIsCreating(false);
             setSelected(res.shop.id);
           }}
         />
@@ -93,7 +99,10 @@ function AdminPage() {
           <button
             key={s.id}
             type="button"
-            onClick={() => setSelected(s.id)}
+            onClick={() => {
+              setIsCreating(false);
+              setSelected(s.id);
+            }}
             className={`rounded-full border px-4 py-1.5 text-xs uppercase tracking-widest transition-colors ${
               selected === s.id
                 ? "border-gold text-gold"
@@ -103,12 +112,19 @@ function AdminPage() {
             {s.name}
           </button>
         ))}
-        <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setSelected(null);
+            setIsCreating(true);
+          }}
+        >
           <Plus className="size-4" /> Nova
         </Button>
       </div>
 
-      {!selected ? (
+      {isCreating ? (
         <CreateShopCard
           onCreate={async (input) => {
             const res = await createShop(input);
@@ -117,10 +133,11 @@ function AdminPage() {
               return;
             }
             toast.success("Barbearia criada!");
+            setIsCreating(false);
             setSelected(res.shop.id);
           }}
         />
-      ) : !admin.shop ? (
+      ) : !selected || !admin.shop ? (
         <p className="text-sm text-muted-foreground">Carregando barbearia...</p>
       ) : (
         <>
@@ -161,9 +178,49 @@ function AdminPage() {
                   : "Seu teste grátis terminou e a página está fora do ar. Assine o Pro para reativar."}
               </span>
               <Button asChild size="sm">
-                <Link to="/precos">
+                <Link to="/precos" search={{ shop: admin.shop.id }}>
                   <Crown className="size-4" /> Assinar o Pro
                 </Link>
+              </Button>
+            </div>
+          )}
+
+          {subscription.subscription && (
+            <div className="panel-lux mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4 text-sm">
+              <div>
+                <p className="font-medium text-gold">
+                  Assinatura: {subscription.isActive ? "ativa" : subscription.subscription.status}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {subscription.periodEnd
+                    ? `Válida até ${subscription.periodEnd.toLocaleDateString("pt-BR")}${subscription.subscription.cancel_at_period_end ? " (cancelamento agendado)" : ""}.`
+                    : "Aguardando a definição do período pela operadora."}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!admin.shop) return;
+                  try {
+                    const result = await createPortalSession({
+                      data: {
+                        shopId: admin.shop.id,
+                        environment: getStripeEnvironment(),
+                        returnUrl: window.location.href,
+                      },
+                    });
+                    if ("error" in result) {
+                      toast.error(result.error);
+                      return;
+                    }
+                    window.location.assign(result.url);
+                  } catch {
+                    toast.error("Não foi possível abrir o portal de cobrança.");
+                  }
+                }}
+              >
+                Gerenciar assinatura
               </Button>
             </div>
           )}
@@ -218,6 +275,19 @@ function AdminPage() {
 type Admin = ReturnType<typeof useShopAdmin>;
 
 function Shell({ children }: { children: React.ReactNode }) {
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function signOut() {
+    setSigningOut(true);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setSigningOut(false);
+      toast.error("Não foi possível sair da conta.");
+      return;
+    }
+    window.location.replace("/auth");
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl px-4 pb-20 pt-10 sm:px-6">
       <div className="mb-6 flex items-center justify-between">
@@ -227,7 +297,15 @@ function Shell({ children }: { children: React.ReactNode }) {
         >
           <ArrowLeft className="size-3.5" /> Site
         </Link>
-        <h1 className="text-xl text-gilded">Painel do dono</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl text-gilded">Painel do dono</h1>
+          <Button asChild type="button" variant="ghost" size="sm">
+            <Link to="/conta">Conta</Link>
+          </Button>
+          <Button type="button" variant="ghost" size="sm" onClick={signOut} disabled={signingOut}>
+            <LogOut className="size-4" /> Sair
+          </Button>
+        </div>
       </div>
       {children}
     </main>
@@ -277,9 +355,18 @@ function CreateShopCard({
       <Button
         className="mt-5 w-full sm:w-auto"
         onClick={async () => {
-          if (name.trim().length < 3) { toast.error("Informe o nome da barbearia."); return; }
-          if (!finalSlug) { toast.error("Informe um link válido."); return; }
-          if (onlyDigits(whatsapp).length < 10) { toast.error("WhatsApp inválido."); return; }
+          if (name.trim().length < 3) {
+            toast.error("Informe o nome da barbearia.");
+            return;
+          }
+          if (!finalSlug) {
+            toast.error("Informe um link válido.");
+            return;
+          }
+          if (onlyDigits(whatsapp).length < 10) {
+            toast.error("WhatsApp inválido.");
+            return;
+          }
           await onCreate({
             name: name.trim(),
             slug: finalSlug,
@@ -365,8 +452,14 @@ function ShopIdentity({ admin, onSaved }: { admin: Admin; onSaved: () => void })
       <Button
         className="mt-5"
         onClick={async () => {
-          if (form.name.trim().length < 3) { toast.error("Nome inválido."); return; }
-          if (!form.slug) { toast.error("Link inválido."); return; }
+          if (form.name.trim().length < 3) {
+            toast.error("Nome inválido.");
+            return;
+          }
+          if (!form.slug) {
+            toast.error("Link inválido.");
+            return;
+          }
           const ok = await admin.updateShop({
             name: form.name.trim(),
             slug: form.slug,
@@ -377,7 +470,10 @@ function ShopIdentity({ admin, onSaved }: { admin: Admin; onSaved: () => void })
             maps_url: form.maps_url || null,
             owner_whatsapp: form.owner_whatsapp,
           });
-          if (!ok) { toast.error("Não foi possível salvar (o link pode já existir)."); return; }
+          if (!ok) {
+            toast.error("Não foi possível salvar (o link pode já existir).");
+            return;
+          }
           onSaved();
           toast.success("Barbearia atualizada!");
         }}
@@ -390,9 +486,12 @@ function ShopIdentity({ admin, onSaved }: { admin: Admin; onSaved: () => void })
 
 function ServicesTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
   const [form, setForm] = useState({ name: "", price: "", duration: "" });
-  const [edit, setEdit] = useState<{ id: string; name: string; price: string; duration: string } | null>(
-    null,
-  );
+  const [edit, setEdit] = useState<{
+    id: string;
+    name: string;
+    price: string;
+    duration: string;
+  } | null>(null);
   const limited = isFree && admin.services.length >= FREE_LIMITS.services;
 
   return (
@@ -401,7 +500,11 @@ function ServicesTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
       <div className="gold-rule my-4" />
       <div className="grid gap-3 sm:grid-cols-4">
         <Field label="Serviço" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
-        <Field label="Preço (R$)" value={form.price} onChange={(v) => setForm({ ...form, price: v })} />
+        <Field
+          label="Preço (R$)"
+          value={form.price}
+          onChange={(v) => setForm({ ...form, price: v })}
+        />
         <Field
           label="Duração"
           value={form.duration}
@@ -413,15 +516,24 @@ function ServicesTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
             className="w-full"
             disabled={limited}
             onClick={async () => {
-              if (form.name.trim().length < 2) { toast.error("Informe o serviço."); return; }
+              if (form.name.trim().length < 2) {
+                toast.error("Informe o serviço.");
+                return;
+              }
               const price = Number(form.price.replace(",", "."));
-              if (!Number.isFinite(price) || price < 0) { toast.error("Preço inválido."); return; }
+              if (!Number.isFinite(price) || price < 0) {
+                toast.error("Preço inválido.");
+                return;
+              }
               const ok = await admin.addService({
                 name: form.name.trim(),
                 price,
                 duration: form.duration.trim() || "30 min",
               });
-              if (!ok) { toast.error("Não foi possível adicionar."); return; }
+              if (!ok) {
+                toast.error("Não foi possível adicionar.");
+                return;
+              }
               setForm({ name: "", price: "", duration: "" });
               toast.success("Serviço adicionado.");
             }}
@@ -440,8 +552,14 @@ function ServicesTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
         {admin.services.map((s) =>
           edit?.id === s.id ? (
             <li key={s.id} className="grid gap-2 py-3 sm:grid-cols-4">
-              <Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
-              <Input value={edit.price} onChange={(e) => setEdit({ ...edit, price: e.target.value })} />
+              <Input
+                value={edit.name}
+                onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+              />
+              <Input
+                value={edit.price}
+                onChange={(e) => setEdit({ ...edit, price: e.target.value })}
+              />
               <Input
                 value={edit.duration}
                 onChange={(e) => setEdit({ ...edit, duration: e.target.value })}
@@ -451,7 +569,10 @@ function ServicesTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
                   size="sm"
                   onClick={async () => {
                     const price = Number(edit.price.replace(",", "."));
-                    if (!Number.isFinite(price)) { toast.error("Preço inválido."); return; }
+                    if (!Number.isFinite(price)) {
+                      toast.error("Preço inválido.");
+                      return;
+                    }
                     await admin.updateService(s.id, {
                       name: edit.name.trim(),
                       price,
@@ -518,8 +639,10 @@ function HoursTab({ admin }: { admin: Admin }) {
           <Button
             className="w-full"
             onClick={async () => {
-              if (!form.days.trim() || !form.hours.trim())
-                { toast.error("Preencha dias e horário."); return; }
+              if (!form.days.trim() || !form.hours.trim()) {
+                toast.error("Preencha dias e horário.");
+                return;
+              }
               await admin.addHour({ days: form.days.trim(), hours: form.hours.trim() });
               setForm({ days: "", hours: "" });
             }}
@@ -533,8 +656,14 @@ function HoursTab({ admin }: { admin: Admin }) {
         {admin.hours.map((h) =>
           edit?.id === h.id ? (
             <li key={h.id} className="grid gap-2 py-3 sm:grid-cols-3">
-              <Input value={edit.days} onChange={(e) => setEdit({ ...edit, days: e.target.value })} />
-              <Input value={edit.hours} onChange={(e) => setEdit({ ...edit, hours: e.target.value })} />
+              <Input
+                value={edit.days}
+                onChange={(e) => setEdit({ ...edit, days: e.target.value })}
+              />
+              <Input
+                value={edit.hours}
+                onChange={(e) => setEdit({ ...edit, hours: e.target.value })}
+              />
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -574,9 +703,12 @@ function HoursTab({ admin }: { admin: Admin }) {
 
 function BarbersTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
   const [form, setForm] = useState({ name: "", specialty: "", whatsapp: "" });
-  const [edit, setEdit] = useState<
-    { id: string; name: string; specialty: string; whatsapp: string } | null
-  >(null);
+  const [edit, setEdit] = useState<{
+    id: string;
+    name: string;
+    specialty: string;
+    whatsapp: string;
+  } | null>(null);
   const limited = isFree && admin.barbers.length >= FREE_LIMITS.barbers;
 
   return (
@@ -600,14 +732,23 @@ function BarbersTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
             className="w-full"
             disabled={limited}
             onClick={async () => {
-              if (form.name.trim().length < 3) { toast.error("Informe o nome."); return; }
-              if (onlyDigits(form.whatsapp).length < 10) { toast.error("WhatsApp inválido."); return; }
+              if (form.name.trim().length < 3) {
+                toast.error("Informe o nome.");
+                return;
+              }
+              if (onlyDigits(form.whatsapp).length < 10) {
+                toast.error("WhatsApp inválido.");
+                return;
+              }
               const ok = await admin.addBarber({
                 name: form.name.trim(),
                 specialty: form.specialty.trim(),
                 whatsapp: form.whatsapp,
               });
-              if (!ok) { toast.error("Não foi possível adicionar."); return; }
+              if (!ok) {
+                toast.error("Não foi possível adicionar.");
+                return;
+              }
               setForm({ name: "", specialty: "", whatsapp: "" });
             }}
           >
@@ -625,7 +766,10 @@ function BarbersTab({ admin, isFree }: { admin: Admin; isFree: boolean }) {
         {admin.barbers.map((b) =>
           edit?.id === b.id ? (
             <li key={b.id} className="grid gap-2 py-3 sm:grid-cols-4">
-              <Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+              <Input
+                value={edit.name}
+                onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+              />
               <Input
                 value={edit.specialty}
                 onChange={(e) => setEdit({ ...edit, specialty: e.target.value })}
@@ -698,10 +842,19 @@ function ClientsTab({ admin }: { admin: Admin }) {
           <Button
             className="w-full"
             onClick={async () => {
-              if (form.name.trim().length < 3) { toast.error("Informe o nome."); return; }
-              if (onlyDigits(form.whatsapp).length < 10) { toast.error("WhatsApp inválido."); return; }
+              if (form.name.trim().length < 3) {
+                toast.error("Informe o nome.");
+                return;
+              }
+              if (onlyDigits(form.whatsapp).length < 10) {
+                toast.error("WhatsApp inválido.");
+                return;
+              }
               const ok = await admin.addClient(form.name.trim(), form.whatsapp);
-              if (!ok) { toast.error("Não foi possível salvar."); return; }
+              if (!ok) {
+                toast.error("Não foi possível salvar.");
+                return;
+              }
               setForm({ name: "", whatsapp: "" });
             }}
           >
@@ -714,7 +867,10 @@ function ClientsTab({ admin }: { admin: Admin }) {
         {admin.clients.map((c) =>
           edit?.id === c.id ? (
             <li key={c.id} className="grid gap-2 py-3 sm:grid-cols-3">
-              <Input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+              <Input
+                value={edit.name}
+                onChange={(e) => setEdit({ ...edit, name: e.target.value })}
+              />
               <Input
                 value={edit.whatsapp}
                 onChange={(e) => setEdit({ ...edit, whatsapp: maskPhone(e.target.value) })}
@@ -791,8 +947,25 @@ function ScheduleTab({ admin }: { admin: Admin }) {
             <span className="flex-1">{clientName(a.clientId)}</span>
             <span className="text-xs text-muted-foreground">{a.service}</span>
             <span className="text-xs text-muted-foreground">{barberName(a.barberId)}</span>
-            <Button size="icon" variant="ghost" onClick={() => admin.removeAppointment(a.id)}>
-              <Trash2 className="size-4 text-destructive" />
+            <span
+              className={`text-[10px] uppercase tracking-wider ${
+                a.status === "cancelled" ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              {a.status === "cancelled" ? "Cancelado" : "Confirmado"}
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              disabled={a.status === "cancelled"}
+              aria-label="Cancelar agendamento"
+              onClick={async () => {
+                const ok = await admin.cancelAppointment(a.id);
+                if (ok) toast.success("Agendamento cancelado. O histórico foi preservado.");
+                else toast.error("Não foi possível cancelar o agendamento.");
+              }}
+            >
+              <X className="size-4 text-destructive" />
             </Button>
           </li>
         ))}

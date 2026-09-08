@@ -1,10 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import {
-  type StripeEnv,
-  createStripeClient,
-  getStripeErrorMessage,
-} from "@/lib/stripe.server";
+import { type StripeEnv, createStripeClient, getStripeErrorMessage } from "@/lib/stripe.server";
 
 type CheckoutSessionResult = { clientSecret: string } | { error: string };
 type PortalSessionResult = { url: string } | { error: string };
@@ -27,7 +24,7 @@ async function resolveOrCreateCustomer(
     const existing = await stripe.customers.list({ email: options.email, limit: 1 });
     const customer = existing.data[0];
     if (customer) {
-      if (options.userId && customer.metadata?.['userId'] !== options.userId) {
+      if (options.userId && customer.metadata?.["userId"] !== options.userId) {
         await stripe.customers.update(customer.id, {
           metadata: { ...customer.metadata, userId: options.userId },
         });
@@ -44,9 +41,10 @@ async function resolveOrCreateCustomer(
 
 export const createCheckoutSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (data: { priceId: string; returnUrl: string; environment: StripeEnv }) => {
+  .validator(
+    (data: { priceId: string; shopId: string; returnUrl: string; environment: StripeEnv }) => {
       if (!/^[a-zA-Z0-9_-]+$/.test(data.priceId)) throw new Error("Invalid priceId");
+      if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(data.shopId)) throw new Error("Invalid shopId");
       return data;
     },
   )
@@ -56,6 +54,21 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
       const {
         data: { user },
       } = await context.supabase.auth.getUser();
+
+      const request = getRequest();
+      const requestOrigin = request ? new URL(request.url).origin : null;
+      const returnUrl = new URL(data.returnUrl);
+      if (!requestOrigin || returnUrl.origin !== requestOrigin) {
+        throw new Error("URL de retorno inválida.");
+      }
+
+      const { data: shop } = await context.supabase
+        .from("barbershops")
+        .select("id")
+        .eq("id", data.shopId)
+        .eq("owner_id", context.userId)
+        .maybeSingle();
+      if (!shop) throw new Error("Barbearia não encontrada ou sem permissão.");
 
       const prices = await stripe.prices.list({ lookup_keys: [data.priceId] });
       const stripePrice = prices.data[0];
@@ -71,13 +84,13 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
         line_items: [{ price: stripePrice.id, quantity: 1 }],
         mode: isRecurring ? "subscription" : "payment",
         ui_mode: "embedded_page",
-        return_url: data.returnUrl,
+        return_url: returnUrl.toString(),
         customer: customerId,
         automatic_tax: { enabled: true },
         customer_update: { address: "auto" },
-        metadata: { userId: context.userId, managed_payments: "false" },
+        metadata: { userId: context.userId, shopId: data.shopId, managed_payments: "false" },
         ...(isRecurring && {
-          subscription_data: { metadata: { userId: context.userId } },
+          subscription_data: { metadata: { userId: context.userId, shopId: data.shopId } },
         }),
       });
 
@@ -89,13 +102,17 @@ export const createCheckoutSession = createServerFn({ method: "POST" })
 
 export const createPortalSession = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: { returnUrl?: string; environment: StripeEnv }) => data)
+  .validator((data: { shopId: string; returnUrl?: string; environment: StripeEnv }) => {
+    if (!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(data.shopId)) throw new Error("Invalid shopId");
+    return data;
+  })
   .handler(async ({ data, context }): Promise<PortalSessionResult> => {
     const { supabase, userId } = context;
     const { data: sub } = await supabase
       .from("subscriptions")
       .select("stripe_customer_id")
       .eq("user_id", userId)
+      .eq("shop_id", data.shopId)
       .eq("environment", data.environment)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -105,9 +122,15 @@ export const createPortalSession = createServerFn({ method: "POST" })
 
     try {
       const stripe = createStripeClient(data.environment);
+      const request = getRequest();
+      const requestOrigin = request ? new URL(request.url).origin : null;
+      const returnUrl = data.returnUrl ? new URL(data.returnUrl) : null;
+      if (returnUrl && (!requestOrigin || returnUrl.origin !== requestOrigin)) {
+        return { error: "URL de retorno inválida." };
+      }
       const portal = await stripe.billingPortal.sessions.create({
         customer: sub.stripe_customer_id as string,
-        ...(data.returnUrl && { return_url: data.returnUrl }),
+        ...(returnUrl && { return_url: returnUrl.toString() }),
       });
       return { url: portal.url };
     } catch (error) {

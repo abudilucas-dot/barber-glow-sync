@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { KeyRound } from "lucide-react";
 
@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import { PLATFORM } from "@/lib/barber-store";
 
 /** Aceita apenas caminhos relativos da própria aplicação. */
@@ -17,10 +16,23 @@ function safeNext(value: unknown): string {
   return value;
 }
 
+function authErrorMessage(error: { code?: string | undefined; message: string }): string {
+  if (
+    error.code === "over_email_send_rate_limit" ||
+    error.message.toLowerCase().includes("email rate limit")
+  ) {
+    return "Limite de e-mails atingido. Aguarde até uma hora ou configure um SMTP próprio no Supabase.";
+  }
+  if (error.code === "invalid_credentials") {
+    return "E-mail ou senha inválidos. Se esta conta foi criada com Google, entre pelo botão Google.";
+  }
+  return error.message;
+}
+
 export const Route = createFileRoute("/auth")({
   ssr: false,
   validateSearch: (search: Record<string, unknown>) => ({
-    next: safeNext(search['next']),
+    next: safeNext(search["next"]),
   }),
   head: () => ({
     meta: [
@@ -44,11 +56,11 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const { next } = Route.useSearch();
-  const navigate = useNavigate();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => {
@@ -64,12 +76,12 @@ function AuthPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}${next}`,
+          emailRedirectTo: `${window.location.origin}/auth?next=${encodeURIComponent(next)}`,
         },
       });
       if (error) {
         setBusy(false);
-        toast.error(error.message);
+        toast.error(authErrorMessage(error));
         return;
       }
       if (data.session) {
@@ -77,36 +89,57 @@ function AuthPage() {
         window.location.replace(next);
         return;
       }
-      // Sem sessão imediata: tenta login direto com a senha informada.
-      const signIn = await supabase.auth.signInWithPassword({ email, password });
       setBusy(false);
-      if (signIn.error) {
-        toast.error(signIn.error.message);
-        return;
-      }
-      window.location.replace(next);
+      setUnconfirmedEmail(email);
+      toast.success("Conta criada! Confirme o e-mail enviado antes de entrar.");
       return;
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) {
-      toast.error(error.message);
+      if (error.code === "email_not_confirmed") {
+        setUnconfirmedEmail(email);
+        toast.error("Confirme o e-mail enviado antes de entrar.");
+      } else {
+        toast.error(authErrorMessage(error));
+      }
       return;
     }
     window.location.replace(next);
   }
 
-  async function google() {
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: `${window.location.origin}/auth?next=${encodeURIComponent(next)}`,
+  async function resendConfirmation() {
+    if (!unconfirmedEmail) return;
+    setBusy(true);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: unconfirmedEmail,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth?next=${encodeURIComponent(next)}`,
+      },
     });
-    if (result.error) {
-      toast.error("Não foi possível entrar com o Google.");
+    setBusy(false);
+    if (error) {
+      toast.error(authErrorMessage(error));
       return;
     }
-    if (result.redirected) return;
-    void navigate({ href: next });
+    toast.success("E-mail de confirmação reenviado.");
+  }
+
+  async function google() {
+    setBusy(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth?next=${encodeURIComponent(next)}`,
+        queryParams: { prompt: "select_account" },
+      },
+    });
+    if (!error) return;
+
+    setBusy(false);
+    toast.error(authErrorMessage(error));
   }
 
   return (
@@ -149,18 +182,37 @@ function AuthPage() {
           </Button>
         </form>
 
-        <Button variant="outline" className="mt-3 w-full" onClick={google}>
+        <Button variant="outline" className="mt-3 w-full" onClick={google} disabled={busy}>
           Entrar com Google
         </Button>
+
+        {mode === "signin" && (
+          <Link
+            to="/recuperar-senha"
+            className="mt-3 block text-center text-xs text-muted-foreground hover:text-gold"
+          >
+            Esqueci minha senha
+          </Link>
+        )}
+
+        {unconfirmedEmail && (
+          <Button
+            type="button"
+            variant="ghost"
+            className="mt-2 w-full text-xs"
+            disabled={busy}
+            onClick={resendConfirmation}
+          >
+            Reenviar e-mail de confirmação
+          </Button>
+        )}
 
         <button
           type="button"
           className="mt-5 w-full text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-gold"
           onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
         >
-          {mode === "signin"
-            ? "Não tem conta? Cadastre-se"
-            : "Já tem conta? Entrar"}
+          {mode === "signin" ? "Não tem conta? Cadastre-se" : "Já tem conta? Entrar"}
         </button>
       </div>
     </main>

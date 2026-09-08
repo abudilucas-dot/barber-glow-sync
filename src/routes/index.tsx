@@ -34,9 +34,7 @@ function Home() {
   return (
     <main className="mx-auto w-full max-w-4xl px-4 pb-20 pt-10 sm:px-6">
       <header className="text-center">
-        <p className="text-[11px] uppercase tracking-[0.4em] text-gold">
-          {PLATFORM.tagline}
-        </p>
+        <p className="text-[11px] uppercase tracking-[0.4em] text-gold">{PLATFORM.tagline}</p>
         <h1 className="mt-3 text-4xl leading-tight sm:text-5xl">
           <span className="text-gilded">{PLATFORM.name}</span>
         </h1>
@@ -133,6 +131,14 @@ function Home() {
         </Link>
         <p className="mt-4">
           © {new Date().getFullYear()} {PLATFORM.name}. Todos os direitos reservados.
+        </p>
+        <p className="mt-3 flex justify-center gap-4">
+          <Link to="/privacidade" className="hover:text-gold">
+            Privacidade
+          </Link>
+          <Link to="/termos" className="hover:text-gold">
+            Termos
+          </Link>
         </p>
       </footer>
     </main>

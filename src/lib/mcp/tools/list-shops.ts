@@ -18,7 +18,7 @@ export default defineTool({
     if (error) {
       return { content: [{ type: "text", text: error.message }], isError: true };
     }
-    const shops = (data ?? []).map((s: any) => ({
+    const shops = (data ?? []).map((s) => ({
       ...s,
       link: `/${s.slug}`,
       live:

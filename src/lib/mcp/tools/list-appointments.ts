@@ -26,9 +26,7 @@ export default defineTool({
     const supabase = supabaseForUser(ctx);
     let query = supabase
       .from("appointments")
-      .select(
-        "id, service, date, time, barbers(id, name), clients(id, name, whatsapp)",
-      )
+      .select("id, service, date, time, barbers(id, name), clients(id, name, whatsapp)")
       .order("date")
       .order("time");
     if (from) query = query.gte("date", from);

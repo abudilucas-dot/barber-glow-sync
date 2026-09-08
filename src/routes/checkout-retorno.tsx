@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/checkout-retorno")({
   validateSearch: (search: Record<string, unknown>): { session_id?: string } =>
-    typeof search['session_id'] === "string" ? { session_id: search['session_id'] } : {},
+    typeof search["session_id"] === "string" ? { session_id: search["session_id"] } : {},
   head: () => ({
     meta: [
       { title: "Assinatura confirmada — BarberLink" },

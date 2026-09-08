@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesUpdate } from "@/integrations/supabase/types";
-import { todayISO } from "@/lib/barber-store";
+import { formatDuration, todayISO } from "@/lib/barber-store";
 
 export type Shop = {
   id: string;
@@ -18,6 +18,10 @@ export type Shop = {
   plan: string;
   status: string;
   trialEndsAt: string;
+  city: string | null;
+  neighborhood: string | null;
+  address: string | null;
+  state: string | null;
 };
 
 /** Barbearia no ar? Pro ativo ou dentro dos 30 dias de teste. */
@@ -38,12 +42,23 @@ export type ShopService = {
   name: string;
   price: number;
   duration: string;
+  durationMinutes: number;
+  description: string;
+  active: boolean;
   sortOrder: number;
 };
 
 export type ShopHour = { id: string; days: string; hours: string; sortOrder: number };
 
-export type Barber = { id: string; name: string; specialty: string; whatsapp: string };
+export type Barber = {
+  id: string;
+  name: string;
+  specialty: string;
+  whatsapp: string;
+  photoUrl: string | null;
+  bio: string;
+  active: boolean;
+};
 export type Client = { id: string; name: string; whatsapp: string };
 export type Appointment = {
   id: string;
@@ -52,6 +67,7 @@ export type Appointment = {
   service: string;
   date: string;
   time: string;
+  status: "pending" | "confirmed" | "completed" | "cancelled" | "no_show";
 };
 
 type ShopRow = {
@@ -69,6 +85,10 @@ type ShopRow = {
   plan: string;
   status: string;
   trial_ends_at: string;
+  city: string | null;
+  neighborhood: string | null;
+  address: string | null;
+  state: string | null;
 };
 
 export function mapShop(r: ShopRow): Shop {
@@ -87,6 +107,10 @@ export function mapShop(r: ShopRow): Shop {
     plan: r.plan,
     status: r.status,
     trialEndsAt: r.trial_ends_at,
+    city: r.city,
+    neighborhood: r.neighborhood,
+    address: r.address,
+    state: r.state,
   };
 }
 
@@ -134,9 +158,19 @@ export function usePublicShop(slug: string) {
     setShop(s);
 
     const [svc, hrs, brb, slots] = await Promise.all([
-      supabase.from("shop_services").select("*").eq("shop_id", s.id).order("sort_order"),
+      supabase
+        .from("shop_services")
+        .select("*")
+        .eq("shop_id", s.id)
+        .eq("active", true)
+        .order("sort_order"),
       supabase.from("shop_hours").select("*").eq("shop_id", s.id).order("sort_order"),
-      supabase.from("barbers").select("*").eq("shop_id", s.id).order("created_at"),
+      supabase
+        .from("barbers")
+        .select("*")
+        .eq("shop_id", s.id)
+        .eq("active", true)
+        .order("created_at"),
       supabase.rpc("get_booked_slots", { _shop_id: s.id }),
     ]);
 
@@ -146,6 +180,9 @@ export function usePublicShop(slug: string) {
         name: r.name,
         price: Number(r.price),
         duration: r.duration,
+        durationMinutes: r.duration_minutes,
+        description: r.description,
+        active: r.active,
         sortOrder: r.sort_order,
       })),
     );
@@ -163,9 +200,14 @@ export function usePublicShop(slug: string) {
         name: b.name,
         specialty: b.specialty,
         whatsapp: b.whatsapp,
+        photoUrl: b.photo_url,
+        bio: b.bio,
+        active: b.active,
       })),
     );
-    setBooked((slots.data ?? []).map((x) => ({ barberId: x.barber_id, date: x.date, time: x.time })));
+    setBooked(
+      (slots.data ?? []).map((x) => ({ barberId: x.barber_id, date: x.date, time: x.time })),
+    );
     setReady(true);
   }, [slug]);
 
@@ -173,46 +215,67 @@ export function usePublicShop(slug: string) {
     void refresh();
   }, [refresh]);
 
-  const isSlotTaken = useCallback(
-    (barberId: string, date: string, time: string) =>
-      booked.some((b) => b.barberId === barberId && b.date === date && b.time === time),
-    [booked],
+  const getAvailableSlots = useCallback(
+    async (serviceId: string, date: string, barberId?: string | null) => {
+      if (!shop) return [] as { barberId: string; startTime: string; endTime: string }[];
+      const { data, error } = await supabase.rpc("get_available_slots", {
+        _shop_id: shop.id,
+        _service_id: serviceId,
+        _date: date,
+        _barber_id: barberId ?? null,
+      });
+      if (error) return [];
+      return (data ?? []).map((slot) => ({
+        barberId: slot.barber_id,
+        startTime: slot.start_time,
+        endTime: slot.end_time,
+      }));
+    },
+    [shop],
   );
 
-  const bookAppointment = useCallback(
+  const createBooking = useCallback(
     async (input: {
       name: string;
       whatsapp: string;
-      barberId: string;
-      service: string;
+      barberId: string | null;
+      serviceId: string;
       date: string;
-      time: string;
+      startTime: string;
     }) => {
       if (!shop) return { ok: false as const, error: "Barbearia não encontrada." };
-      const { data: clientId, error: clientErr } = await supabase.rpc("upsert_client", {
+      const { data, error } = await supabase.rpc("create_booking", {
         _shop_id: shop.id,
-        _name: input.name,
-        _whatsapp: input.whatsapp,
+        _service_id: input.serviceId,
+        _barber_id: input.barberId,
+        _date: input.date,
+        _start_time: input.startTime,
+        _client_name: input.name,
+        _client_phone: input.whatsapp,
       });
-      if (clientErr || !clientId) {
-        return { ok: false as const, error: "Não foi possível salvar seu cadastro." };
+      if (error || !data?.[0]) {
+        return {
+          ok: false as const,
+          error: error?.message ?? "Não foi possível concluir a reserva.",
+        };
       }
-      const { error } = await supabase.from("appointments").insert({
-        shop_id: shop.id,
-        client_id: clientId as string,
-        barber_id: input.barberId,
-        service: input.service,
-        date: input.date,
-        time: input.time,
-      });
-      if (error) return { ok: false as const, error: "Esse horário acabou de ser ocupado." };
       await refresh();
-      return { ok: true as const, clientId: clientId as string };
+      return { ok: true as const, booking: data[0] };
     },
     [shop, refresh],
   );
 
-  return { shop, services, hours, barbers, ready, isSlotTaken, bookAppointment, refresh };
+  return {
+    shop,
+    services,
+    hours,
+    barbers,
+    booked,
+    ready,
+    getAvailableSlots,
+    createBooking,
+    refresh,
+  };
 }
 
 /** Barbearias do dono logado. */
@@ -260,9 +323,15 @@ export function useMyShops() {
       if (error || !data) {
         return {
           ok: false as const,
-          error: error?.code === "23505" ? "Esse link já está em uso." : "Não foi possível criar.",
+          error:
+            error?.code === "23505"
+              ? "Esse link já está em uso."
+              : error?.code === "PGRST205"
+                ? "O banco de dados ainda não foi configurado. Aplique as migrações do projeto e tente novamente."
+                : "Não foi possível criar.",
         };
       }
+      await supabase.rpc("initialize_shop_schedule", { _shop_id: data.id });
       await refresh();
       return { ok: true as const, shop: mapShop(data as ShopRow) };
     },
@@ -302,6 +371,9 @@ export function useShopAdmin(shopId: string | null) {
         name: r.name,
         price: Number(r.price),
         duration: r.duration,
+        durationMinutes: r.duration_minutes,
+        description: r.description,
+        active: r.active,
         sortOrder: r.sort_order,
       })),
     );
@@ -319,6 +391,9 @@ export function useShopAdmin(shopId: string | null) {
         name: b.name,
         specialty: b.specialty,
         whatsapp: b.whatsapp,
+        photoUrl: b.photo_url,
+        bio: b.bio,
+        active: b.active,
       })),
     );
     setClients((cli.data ?? []).map((c) => ({ id: c.id, name: c.name, whatsapp: c.whatsapp })));
@@ -330,6 +405,7 @@ export function useShopAdmin(shopId: string | null) {
         service: a.service,
         date: a.date,
         time: a.time,
+        status: a.status,
       })),
     );
     setReady(true);
@@ -342,22 +418,34 @@ export function useShopAdmin(shopId: string | null) {
 
   const updateShop = useCallback(
     async (patch: TablesUpdate<"barbershops">) => {
-      if (!shopId) return false;
-      const { error } = await supabase.from("barbershops").update(patch).eq("id", shopId);
+      if (!shopId || !shop) return false;
+      const { error } = await supabase.rpc("update_shop_profile", {
+        _shop_id: shopId,
+        _name: patch.name ?? shop.name,
+        _slug: patch.slug ?? shop.slug,
+        _tagline: patch.tagline ?? shop.tagline,
+        _about: patch.about ?? shop.about,
+        _hero_url: patch.hero_url ?? shop.heroUrl ?? "",
+        _instagram_url: patch.instagram_url ?? shop.instagramUrl ?? "",
+        _maps_url: patch.maps_url ?? shop.mapsUrl ?? "",
+        _owner_whatsapp: patch.owner_whatsapp ?? shop.ownerWhatsapp,
+      });
       await refresh();
       return !error;
     },
-    [shopId, refresh],
+    [shopId, shop, refresh],
   );
 
   const addService = useCallback(
     async (input: { name: string; price: number; duration: string }) => {
       if (!shopId) return false;
+      const numericDuration = Number(input.duration.match(/\d+/)?.[0] ?? 30);
       const { error } = await supabase.from("shop_services").insert({
         shop_id: shopId,
         name: input.name,
         price: input.price,
-        duration: input.duration,
+        duration: formatDuration(numericDuration),
+        duration_minutes: numericDuration,
         sort_order: services.length + 1,
       });
       await refresh();
@@ -386,9 +474,12 @@ export function useShopAdmin(shopId: string | null) {
   const addHour = useCallback(
     async (input: { days: string; hours: string }) => {
       if (!shopId) return false;
-      const { error } = await supabase
-        .from("shop_hours")
-        .insert({ shop_id: shopId, days: input.days, hours: input.hours, sort_order: hours.length + 1 });
+      const { error } = await supabase.from("shop_hours").insert({
+        shop_id: shopId,
+        days: input.days,
+        hours: input.hours,
+        sort_order: hours.length + 1,
+      });
       await refresh();
       return !error;
     },
@@ -413,9 +504,14 @@ export function useShopAdmin(shopId: string | null) {
   );
 
   const addBarber = useCallback(
-    async (input: Omit<Barber, "id">) => {
+    async (input: Pick<Barber, "name" | "specialty" | "whatsapp">) => {
       if (!shopId) return false;
-      const { error } = await supabase.from("barbers").insert({ shop_id: shopId, ...input });
+      const { data, error } = await supabase
+        .from("barbers")
+        .insert({ shop_id: shopId, ...input })
+        .select("id")
+        .maybeSingle();
+      if (!error && data) await supabase.rpc("initialize_barber_schedule", { _barber_id: data.id });
       await refresh();
       return !error;
     },
@@ -423,7 +519,7 @@ export function useShopAdmin(shopId: string | null) {
   );
 
   const updateBarber = useCallback(
-    async (id: string, patch: Partial<Omit<Barber, "id">>) => {
+    async (id: string, patch: { name?: string; specialty?: string; whatsapp?: string }) => {
       const { error } = await supabase.from("barbers").update(patch).eq("id", id);
       await refresh();
       return !error;
@@ -470,10 +566,11 @@ export function useShopAdmin(shopId: string | null) {
     [refresh],
   );
 
-  const removeAppointment = useCallback(
+  const cancelAppointment = useCallback(
     async (id: string) => {
-      await supabase.from("appointments").delete().eq("id", id);
+      const { error } = await supabase.rpc("cancel_appointment", { _appointment_id: id });
       await refresh();
+      return !error;
     },
     [refresh],
   );
@@ -482,9 +579,10 @@ export function useShopAdmin(shopId: string | null) {
     if (!shopId) return 0;
     const { data } = await supabase
       .from("appointments")
-      .delete()
+      .update({ status: "cancelled" })
       .eq("shop_id", shopId)
       .lt("date", todayISO())
+      .neq("status", "cancelled")
       .select("id");
     await refresh();
     return data?.length ?? 0;
@@ -512,7 +610,7 @@ export function useShopAdmin(shopId: string | null) {
     addClient,
     updateClient,
     removeClient,
-    removeAppointment,
+    cancelAppointment,
     purgePastAppointments,
   };
 }
