@@ -23,6 +23,7 @@ export type Database = {
           id: string
           service: string
           shop_id: string | null
+          status: string
           time: string
         }
         Insert: {
@@ -33,6 +34,7 @@ export type Database = {
           id?: string
           service: string
           shop_id?: string | null
+          status?: string
           time: string
         }
         Update: {
@@ -43,6 +45,7 @@ export type Database = {
           id?: string
           service?: string
           shop_id?: string | null
+          status?: string
           time?: string
         }
         Relationships: [
@@ -71,25 +74,34 @@ export type Database = {
       }
       barbers: {
         Row: {
+          active: boolean
+          bio: string
           created_at: string
           id: string
           name: string
+          photo_url: string | null
           shop_id: string | null
           specialty: string
           whatsapp: string
         }
         Insert: {
+          active?: boolean
+          bio?: string
           created_at?: string
           id?: string
           name: string
+          photo_url?: string | null
           shop_id?: string | null
           specialty?: string
           whatsapp: string
         }
         Update: {
+          active?: boolean
+          bio?: string
           created_at?: string
           id?: string
           name?: string
+          photo_url?: string | null
           shop_id?: string | null
           specialty?: string
           whatsapp?: string
@@ -107,17 +119,21 @@ export type Database = {
       barbershops: {
         Row: {
           about: string
+          address: string | null
+          city: string | null
           created_at: string
           hero_url: string | null
           id: string
           instagram_url: string | null
           maps_url: string | null
           name: string
+          neighborhood: string | null
           owner_id: string
           owner_whatsapp: string
           plan: string
           primary_color: string
           slug: string
+          state: string | null
           status: string
           tagline: string
           trial_ends_at: string
@@ -125,17 +141,21 @@ export type Database = {
         }
         Insert: {
           about?: string
+          address?: string | null
+          city?: string | null
           created_at?: string
           hero_url?: string | null
           id?: string
           instagram_url?: string | null
           maps_url?: string | null
           name: string
+          neighborhood?: string | null
           owner_id: string
           owner_whatsapp?: string
           plan?: string
           primary_color?: string
           slug: string
+          state?: string | null
           status?: string
           tagline?: string
           trial_ends_at?: string
@@ -143,17 +163,21 @@ export type Database = {
         }
         Update: {
           about?: string
+          address?: string | null
+          city?: string | null
           created_at?: string
           hero_url?: string | null
           id?: string
           instagram_url?: string | null
           maps_url?: string | null
           name?: string
+          neighborhood?: string | null
           owner_id?: string
           owner_whatsapp?: string
           plan?: string
           primary_color?: string
           slug?: string
+          state?: string | null
           status?: string
           tagline?: string
           trial_ends_at?: string
@@ -233,8 +257,11 @@ export type Database = {
       }
       shop_services: {
         Row: {
+          active: boolean
           created_at: string
+          description: string
           duration: string
+          duration_minutes: number
           id: string
           name: string
           price: number
@@ -243,8 +270,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active?: boolean
           created_at?: string
+          description?: string
           duration?: string
+          duration_minutes?: number
           id?: string
           name: string
           price?: number
@@ -253,8 +283,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active?: boolean
           created_at?: string
+          description?: string
           duration?: string
+          duration_minutes?: number
           id?: string
           name?: string
           price?: number
@@ -272,6 +305,30 @@ export type Database = {
           },
         ]
       }
+      subscription_events: {
+        Row: {
+          created_at: string
+          environment: string
+          event_type: string
+          id: string
+          stripe_event_id: string
+        }
+        Insert: {
+          created_at?: string
+          environment?: string
+          event_type: string
+          id?: string
+          stripe_event_id: string
+        }
+        Update: {
+          created_at?: string
+          environment?: string
+          event_type?: string
+          id?: string
+          stripe_event_id?: string
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           cancel_at_period_end: boolean
@@ -282,6 +339,7 @@ export type Database = {
           id: string
           price_id: string | null
           product_id: string | null
+          shop_id: string | null
           status: string
           stripe_customer_id: string
           stripe_subscription_id: string
@@ -297,6 +355,7 @@ export type Database = {
           id?: string
           price_id?: string | null
           product_id?: string | null
+          shop_id?: string | null
           status?: string
           stripe_customer_id: string
           stripe_subscription_id: string
@@ -312,13 +371,22 @@ export type Database = {
           id?: string
           price_id?: string | null
           product_id?: string | null
+          shop_id?: string | null
           status?: string
           stripe_customer_id?: string
           stripe_subscription_id?: string
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "barbershops"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -346,6 +414,43 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cancel_appointment: {
+        Args: { _appointment_id: string }
+        Returns: boolean
+      }
+      create_booking: {
+        Args: {
+          _barber_id: string
+          _client_name: string
+          _client_phone: string
+          _date: string
+          _service_id: string
+          _shop_id: string
+          _start_time: string
+        }
+        Returns: {
+          barber_id: string
+          client_id: string
+          date: string
+          id: string
+          service: string
+          status: string
+          time: string
+        }[]
+      }
+      get_available_slots: {
+        Args: {
+          _barber_id?: string
+          _date: string
+          _service_id: string
+          _shop_id: string
+        }
+        Returns: {
+          barber_id: string
+          end_time: string
+          start_time: string
+        }[]
+      }
       get_booked_slots:
         | {
             Args: { _from?: string; _to?: string }
@@ -370,11 +475,30 @@ export type Database = {
         }
         Returns: boolean
       }
+      initialize_barber_schedule: {
+        Args: { _barber_id: string }
+        Returns: boolean
+      }
+      initialize_shop_schedule: { Args: { _shop_id: string }; Returns: boolean }
       is_shop_owner: {
         Args: { _shop_id: string; _user_id: string }
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      update_shop_profile: {
+        Args: {
+          _about: string
+          _hero_url: string
+          _instagram_url: string
+          _maps_url: string
+          _name: string
+          _owner_whatsapp: string
+          _shop_id: string
+          _slug: string
+          _tagline: string
+        }
+        Returns: boolean
+      }
       upsert_client: {
         Args: { _name: string; _shop_id: string; _whatsapp: string }
         Returns: string
