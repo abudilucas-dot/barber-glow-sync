@@ -222,7 +222,7 @@ export function usePublicShop(slug: string) {
         _shop_id: shop.id,
         _service_id: serviceId,
         _date: date,
-        _barber_id: barberId ?? null,
+        _barber_id: barberId ?? undefined,
       });
       if (error) return [];
       return (data ?? []).map((slot) => ({
