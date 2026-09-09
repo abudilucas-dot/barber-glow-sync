@@ -218,12 +218,13 @@ export function usePublicShop(slug: string) {
   const getAvailableSlots = useCallback(
     async (serviceId: string, date: string, barberId?: string | null) => {
       if (!shop) return [] as { barberId: string; startTime: string; endTime: string }[];
-      const { data, error } = await supabase.rpc("get_available_slots", {
+      const args: { _shop_id: string; _service_id: string; _date: string; _barber_id?: string } = {
         _shop_id: shop.id,
         _service_id: serviceId,
         _date: date,
-        _barber_id: barberId ?? undefined,
-      });
+      };
+      if (barberId) args._barber_id = barberId;
+      const { data, error } = await supabase.rpc("get_available_slots", args);
       if (error) return [];
       return (data ?? []).map((slot) => ({
         barberId: slot.barber_id,
