@@ -53,3 +53,24 @@ test("SEO não usa a marca antiga e protege rotas privadas", async () => {
   assert.match(publicShop, /throw notFound\(\)/);
   assert.match(robots, /Sitemap:/);
 });
+
+test("configura o Supabase no navegador sem expor a chave de serviço", async () => {
+  const root = await read("src/routes/__root.tsx");
+  const client = await read("src/integrations/supabase/client.ts");
+
+  assert.match(root, /publicSupabase: url && publishableKey/);
+  assert.match(root, /configureSupabaseClient\(publicSupabase\)/);
+  assert.match(client, /runtimePublicConfig\?\.publishableKey/);
+  assert.doesNotMatch(client, /SUPABASE_SERVICE_ROLE_KEY/);
+});
+
+test("dados privados do dono não são expostos pela vitrine pública", async () => {
+  const migration = await read("supabase/migrations/20260909020000_safe_public_shop_functions.sql");
+  const store = await read("src/lib/shop-store.ts");
+
+  assert.match(migration, /DROP VIEW IF EXISTS public\.public_barbershops/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.get_public_shops/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION public\.get_public_shop/);
+  assert.doesNotMatch(migration, /owner_whatsapp/);
+  assert.match(store, /rpc\("get_public_shops"\)/);
+});

@@ -14,11 +14,11 @@ export const Route = createFileRoute("/$slug")({
     const key = process.env["SUPABASE_PUBLISHABLE_KEY"];
     if (!url || !key) return null;
     const { createClient } = await import("@supabase/supabase-js");
-    const { data } = await createClient(url, key, { auth: { persistSession: false } })
-      .from("barbershops")
-      .select("name, tagline, about, hero_url")
-      .eq("slug", params.slug)
-      .maybeSingle();
+    const { data: rows } = await createClient(url, key, { auth: { persistSession: false } }).rpc(
+      "get_public_shop",
+      { _slug: params.slug },
+    );
+    const data = rows?.[0] ?? null;
     if (!data && typeof window === "undefined") {
       throw notFound();
     }

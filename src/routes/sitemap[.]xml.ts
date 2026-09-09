@@ -37,10 +37,7 @@ export const Route = createFileRoute("/sitemap.xml")({
               },
             },
           });
-          const { data } = await client
-            .from("barbershops")
-            .select("slug, plan, trial_ends_at, status")
-            .eq("status", "active");
+          const { data } = await client.rpc("get_public_shops");
           for (const shop of (data ?? []) as Array<{
             slug: string;
             plan: string;

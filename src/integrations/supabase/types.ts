@@ -445,6 +445,50 @@ export type Database = {
           start_time: string;
         }[];
       };
+      get_public_shop: {
+        Args: { _slug: string };
+        Returns: {
+          about: string;
+          address: string | null;
+          city: string | null;
+          created_at: string;
+          hero_url: string | null;
+          id: string;
+          instagram_url: string | null;
+          maps_url: string | null;
+          name: string;
+          neighborhood: string | null;
+          plan: string;
+          primary_color: string;
+          slug: string;
+          state: string | null;
+          status: string;
+          tagline: string;
+          trial_ends_at: string;
+        }[];
+      };
+      get_public_shops: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          about: string;
+          address: string | null;
+          city: string | null;
+          created_at: string;
+          hero_url: string | null;
+          id: string;
+          instagram_url: string | null;
+          maps_url: string | null;
+          name: string;
+          neighborhood: string | null;
+          plan: string;
+          primary_color: string;
+          slug: string;
+          state: string | null;
+          status: string;
+          tagline: string;
+          trial_ends_at: string;
+        }[];
+      };
       get_booked_slots:
         | {
             Args: { _from?: string; _to?: string };

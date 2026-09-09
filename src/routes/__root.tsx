@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { configureSupabaseClient } from "@/integrations/supabase/client";
 
 function NotFoundComponent() {
   return (
@@ -74,6 +75,14 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+  loader: () => {
+    const url = process.env["SUPABASE_URL"];
+    const publishableKey = process.env["SUPABASE_PUBLISHABLE_KEY"];
+
+    return {
+      publicSupabase: url && publishableKey ? { url, publishableKey } : null,
+    };
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -118,6 +127,8 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const { publicSupabase } = Route.useLoaderData();
+  configureSupabaseClient(publicSupabase);
 
   return (
     <QueryClientProvider client={queryClient}>

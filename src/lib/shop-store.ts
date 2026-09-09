@@ -72,7 +72,7 @@ export type Appointment = {
 
 type ShopRow = {
   id: string;
-  owner_id: string;
+  owner_id?: string | null;
   slug: string;
   name: string;
   tagline: string;
@@ -80,7 +80,7 @@ type ShopRow = {
   hero_url: string | null;
   instagram_url: string | null;
   maps_url: string | null;
-  owner_whatsapp: string;
+  owner_whatsapp?: string | null;
   primary_color: string;
   plan: string;
   status: string;
@@ -94,7 +94,7 @@ type ShopRow = {
 export function mapShop(r: ShopRow): Shop {
   return {
     id: r.id,
-    ownerId: r.owner_id,
+    ownerId: r.owner_id ?? "",
     slug: r.slug,
     name: r.name,
     tagline: r.tagline,
@@ -102,7 +102,7 @@ export function mapShop(r: ShopRow): Shop {
     heroUrl: r.hero_url,
     instagramUrl: r.instagram_url,
     mapsUrl: r.maps_url,
-    ownerWhatsapp: r.owner_whatsapp,
+    ownerWhatsapp: r.owner_whatsapp ?? "",
     primaryColor: r.primary_color,
     plan: r.plan,
     status: r.status,
@@ -114,6 +114,9 @@ export function mapShop(r: ShopRow): Shop {
   };
 }
 
+// This view intentionally omits private owner data from anonymous visitors.
+// It has the same public shape used by ShopRow, so the browser never queries
+// the private barbershops table for the directory or public pages.
 /** Vitrine pública: todas as barbearias ativas da plataforma. */
 export function useShopDirectory() {
   const [shops, setShops] = useState<Shop[]>([]);
@@ -121,11 +124,7 @@ export function useShopDirectory() {
 
   useEffect(() => {
     void (async () => {
-      const { data } = await supabase
-        .from("barbershops")
-        .select("*")
-        .eq("status", "active")
-        .order("created_at");
+      const { data } = await supabase.rpc("get_public_shops");
       setShops(((data ?? []) as ShopRow[]).map(mapShop));
       setReady(true);
     })();
@@ -140,15 +139,11 @@ export function usePublicShop(slug: string) {
   const [services, setServices] = useState<ShopService[]>([]);
   const [hours, setHours] = useState<ShopHour[]>([]);
   const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [booked, setBooked] = useState<{ barberId: string; date: string; time: string }[]>([]);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
-    const { data: shopRow } = await supabase
-      .from("barbershops")
-      .select("*")
-      .eq("slug", slug)
-      .maybeSingle();
+    const { data: shopRows } = await supabase.rpc("get_public_shop", { _slug: slug });
+    const shopRow = shopRows?.[0];
     if (!shopRow) {
       setShop(null);
       setReady(true);
@@ -157,7 +152,7 @@ export function usePublicShop(slug: string) {
     const s = mapShop(shopRow as ShopRow);
     setShop(s);
 
-    const [svc, hrs, brb, slots] = await Promise.all([
+    const [svc, hrs, brb] = await Promise.all([
       supabase
         .from("shop_services")
         .select("*")
@@ -171,7 +166,6 @@ export function usePublicShop(slug: string) {
         .eq("shop_id", s.id)
         .eq("active", true)
         .order("created_at"),
-      supabase.rpc("get_booked_slots", { _shop_id: s.id }),
     ]);
 
     setServices(
@@ -204,9 +198,6 @@ export function usePublicShop(slug: string) {
         bio: b.bio,
         active: b.active,
       })),
-    );
-    setBooked(
-      (slots.data ?? []).map((x) => ({ barberId: x.barber_id, date: x.date, time: x.time })),
     );
     setReady(true);
   }, [slug]);
@@ -271,7 +262,6 @@ export function usePublicShop(slug: string) {
     services,
     hours,
     barbers,
-    booked,
     ready,
     getAvailableSlots,
     createBooking,
