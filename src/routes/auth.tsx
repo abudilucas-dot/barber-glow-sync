@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { KeyRound } from "lucide-react";
+import { KeyRound, ShieldCheck, Store } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { PLATFORM } from "@/lib/barber-store";
 import { absoluteUrl } from "@/lib/site-url";
 
@@ -22,7 +23,7 @@ function authErrorMessage(error: { code?: string | undefined; message: string })
     error.code === "over_email_send_rate_limit" ||
     error.message.toLowerCase().includes("email rate limit")
   ) {
-    return "Limite de e-mails atingido. Aguarde até uma hora ou configure um SMTP próprio no Supabase.";
+    return "Limite de e-mails atingido. Aguarde alguns minutos e tente novamente.";
   }
   if (error.code === "invalid_credentials") {
     return "E-mail ou senha inválidos. Se esta conta foi criada com Google, entre pelo botão Google.";
@@ -61,6 +62,8 @@ function AuthPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
 
@@ -79,6 +82,7 @@ function AuthPage() {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth?next=${encodeURIComponent(next)}`,
+          data: { full_name: fullName.trim(), phone: phone.trim() },
         },
       });
       if (error) {
@@ -87,6 +91,13 @@ function AuthPage() {
         return;
       }
       if (data.session) {
+        if (data.user) {
+          await supabase.from("profiles").upsert({
+            user_id: data.user.id,
+            full_name: fullName.trim(),
+            phone: phone.trim(),
+          });
+        }
         toast.success("Conta criada! Entrando...");
         window.location.replace(next);
         return;
@@ -131,31 +142,45 @@ function AuthPage() {
 
   async function google() {
     setBusy(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth?next=${encodeURIComponent(next)}`,
-        queryParams: { prompt: "select_account" },
-      },
+    sessionStorage.setItem("barberlink:auth-next", next);
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: `${window.location.origin}/auth?next=${encodeURIComponent(next)}`,
+      extraParams: { prompt: "select_account" },
     });
-    if (!error) return;
+    if (!result.error) return;
 
     setBusy(false);
-    toast.error(authErrorMessage(error));
+    toast.error(authErrorMessage(result.error));
   }
 
   return (
-    <main className="mx-auto flex min-h-[80vh] w-full max-w-md flex-col justify-center px-4 py-16">
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-4 py-12">
       <div className="panel-lux rounded-2xl p-6 sm:p-8">
-        <p className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
-          {PLATFORM.name}
-        </p>
+        <div className="flex size-11 items-center justify-center rounded-md border border-gold/40 bg-accent">
+          <Store className="size-5 text-gold" />
+        </div>
+        <p className="mt-5 text-[11px] uppercase tracking-[0.3em] text-muted-foreground">{PLATFORM.name}</p>
         <h1 className="mt-2 flex items-center gap-2 text-2xl">
           <KeyRound className="size-5 text-gold" />
-          <span className="text-gilded">Acesso da Equipe</span>
+          <span className="text-gilded">Painel da sua barbearia</span>
         </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Entre na conta vinculada à sua loja. Cada conta acessa somente os próprios dados.
+        </p>
 
         <form className="mt-6 space-y-4" onSubmit={submit}>
+          {mode === "signup" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="full-name">Nome completo</Label>
+                <Input id="full-name" required minLength={3} value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Seu nome" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">WhatsApp</Label>
+                <Input id="phone" type="tel" required value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(44) 99999-9999" />
+              </div>
+            </>
+          )}
           <div className="space-y-2">
             <Label htmlFor="email">E-mail</Label>
             <Input
@@ -180,12 +205,12 @@ function AuthPage() {
             />
           </div>
           <Button type="submit" className="w-full" disabled={busy}>
-            {mode === "signin" ? "Entrar" : "Criar conta"}
+            {busy ? "Aguarde..." : mode === "signin" ? "Entrar no painel" : "Criar conta da loja"}
           </Button>
         </form>
 
         <Button variant="outline" className="mt-3 w-full" onClick={google} disabled={busy}>
-          Entrar com Google
+          Continuar com Google
         </Button>
 
         {mode === "signin" && (
@@ -209,13 +234,18 @@ function AuthPage() {
           </Button>
         )}
 
-        <button
+        <Button
           type="button"
-          className="mt-5 w-full text-xs uppercase tracking-[0.2em] text-muted-foreground hover:text-gold"
+          variant="ghost"
+          className="mt-5 w-full text-xs uppercase tracking-[0.2em]"
           onClick={() => setMode(mode === "signin" ? "signup" : "signin")}
         >
-          {mode === "signin" ? "Não tem conta? Cadastre-se" : "Já tem conta? Entrar"}
-        </button>
+          {mode === "signin" ? "Criar conta para minha loja" : "Já tenho conta"}
+        </Button>
+        <div className="mt-5 flex items-start gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
+          <ShieldCheck className="mt-0.5 size-4 shrink-0 text-gold" />
+          <span>Os clientes, agendamentos e profissionais de uma loja não aparecem para outras contas.</span>
+        </div>
       </div>
     </main>
   );

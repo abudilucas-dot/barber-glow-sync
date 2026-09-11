@@ -9,4 +9,5 @@
 - [x] Sitemap dinâmico com as barbearias no ar + SEO por rota
 - [x] Ferramenta de agente list_shops
 - [x] Padronização visual do painel (abas e status do plano)
+- [x] Login de donos no painel com perfil e isolamento dos dados por conta/loja
 - [ ] Concluir go-live de pagamentos (etapas na aba Payments)
