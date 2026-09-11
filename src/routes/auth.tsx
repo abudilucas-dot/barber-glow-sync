@@ -67,9 +67,25 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
 
+  async function ensureOwnerProfile(user: {
+    id: string;
+    user_metadata: Record<string, unknown>;
+  }) {
+    await supabase.from("profiles").upsert(
+      {
+        user_id: user.id,
+        full_name: String(user.user_metadata["full_name"] ?? ""),
+        phone: String(user.user_metadata["phone"] ?? ""),
+        avatar_url: String(user.user_metadata["avatar_url"] ?? "") || null,
+      },
+      { onConflict: "user_id", ignoreDuplicates: true },
+    );
+  }
+
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) window.location.replace(next);
+      if (!data.session) return;
+      void ensureOwnerProfile(data.session.user).finally(() => window.location.replace(next));
     });
   }, [next]);
 
@@ -91,13 +107,7 @@ function AuthPage() {
         return;
       }
       if (data.session) {
-        if (data.user) {
-          await supabase.from("profiles").upsert({
-            user_id: data.user.id,
-            full_name: fullName.trim(),
-            phone: phone.trim(),
-          });
-        }
+        if (data.user) await ensureOwnerProfile(data.user);
         toast.success("Conta criada! Entrando...");
         window.location.replace(next);
         return;
@@ -108,7 +118,7 @@ function AuthPage() {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
     if (error) {
       if (error.code === "email_not_confirmed") {
@@ -119,6 +129,7 @@ function AuthPage() {
       }
       return;
     }
+    if (data.user) await ensureOwnerProfile(data.user);
     window.location.replace(next);
   }
 

@@ -11,6 +11,11 @@ export const Route = createFileRoute("/_authenticated/conta")({
   head: () => ({
     meta: [
       { title: "Segurança da conta — BarberLink" },
+      { name: "description", content: "Gerencie o perfil e a segurança da sua conta BarberLink." },
+      { property: "og:title", content: "Minha conta — BarberLink" },
+      { property: "og:description", content: "Gerencie o perfil e a segurança da sua conta BarberLink." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
