@@ -239,7 +239,7 @@ export function usePublicShop(slug: string) {
       const { data, error } = await supabase.rpc("create_booking", {
         _shop_id: shop.id,
         _service_id: input.serviceId,
-        _barber_id: input.barberId ?? null,
+        _barber_id: input.barberId ?? "00000000-0000-0000-0000-000000000000",
         _date: input.date,
         _start_time: input.startTime,
         _client_name: input.name,

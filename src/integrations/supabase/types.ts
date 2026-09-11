@@ -217,6 +217,33 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string
+          phone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string
+          phone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string
+          phone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       shop_hours: {
         Row: {
           created_at: string
@@ -468,6 +495,50 @@ export type Database = {
               time: string
             }[]
           }
+      get_public_shop: {
+        Args: { _slug: string }
+        Returns: {
+          about: string
+          address: string
+          city: string
+          created_at: string
+          hero_url: string
+          id: string
+          instagram_url: string
+          maps_url: string
+          name: string
+          neighborhood: string
+          plan: string
+          primary_color: string
+          slug: string
+          state: string
+          status: string
+          tagline: string
+          trial_ends_at: string
+        }[]
+      }
+      get_public_shops: {
+        Args: never
+        Returns: {
+          about: string
+          address: string
+          city: string
+          created_at: string
+          hero_url: string
+          id: string
+          instagram_url: string
+          maps_url: string
+          name: string
+          neighborhood: string
+          plan: string
+          primary_color: string
+          slug: string
+          state: string
+          status: string
+          tagline: string
+          trial_ends_at: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
